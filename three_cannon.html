@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title> Three.js / Cannon.js Example</title>
+    <meta charset="utf-8">
+    <style>
+      * {
+        margin:0;
+        padding:0
+      }
+      body {
+        overflow:hidden;
+      }
+    </style>
+  </head>
+  <body>
+    <script src="node_modules/three/build/three.min.js"></script>
+    <script src="node_modules/cannon/build/cannon.min.js"></script>
+    <script src="node_modules/three/examples/js/renderers/CanvasRenderer.js"></script>
+    <script src="node_modules/three/examples/js/renderers/Projector.js"></script>
+    <script>
+      var world, mass, body, shape, timeStep=1/60, camera, scene, renderer, geometry, material, mesh;
+      initThree();
+      initCannon();
+      animate();
+      function initCannon() {
+          world = new CANNON.World();
+          world.gravity.set(0,-9.8,0);
+          world.broadphase = new CANNON.NaiveBroadphase();
+          world.solver.iterations = 10;
+          shape = new CANNON.Box(new CANNON.Vec3(0,0.1,0));
+          mass = 1;
+          body = new CANNON.Body({ mass: 1 });
+          body.addShape(shape);
+          body.angularVelocity.set(0,0,0);
+          body.angularDamping = 0.5;          
+          world.addBody(body);
+
+          // Create a plane
+          var groundShape = new CANNON.Plane();
+          var groundBody = new CANNON.Body({ mass: 0 });
+          groundBody.addShape(groundShape);
+          groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1,0,0),-Math.PI/2);
+          world.addBody(groundBody);
+      }
+      function initThree() {
+          scene = new THREE.Scene();
+          camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 1, 100 );
+          camera.position.z = 5;
+          scene.add( camera );
+          geometry = new THREE.BoxGeometry( 2, 2, 2 );
+          material = new THREE.MeshBasicMaterial( { color: 0xff0000, wireframe: true } );
+          mesh = new THREE.Mesh( geometry, material );
+          scene.add( mesh );
+          renderer = new THREE.CanvasRenderer();
+          renderer.setSize( window.innerWidth, window.innerHeight );
+          document.body.appendChild( renderer.domElement );
+      }
+      function animate() {
+          requestAnimationFrame( animate );
+          updatePhysics();
+          render();
+      }
+      function updatePhysics() {
+          // Step the physics world
+          world.step(timeStep);
+          // Copy coordinates from Cannon.js to Three.js
+          mesh.position.copy(body.position);
+          mesh.quaternion.copy(body.quaternion);
+      }
+      function render() {
+          renderer.render( scene, camera );
+      }
+      
+    </script>
+  </body>
+</html>
