@@ -4,26 +4,31 @@
 <head>
     <title>cannon.js - single body on plane demo</title>
     <meta charset="utf-8">
-    <link rel="stylesheet" href="css/style.css" type="text/css" />
+    <!-- <link rel="stylesheet" href="css/style.css" type="text/css" /> -->
     <meta name="viewport" content="width=device-width, user-scalable=no, minimum-scale=1.0, maximum-scale=1.0">
 </head>
 
 <body>
     <script src="node_modules/cannon/build/cannon.js"></script>
-    <script src="node_modules/cannon/build/cannon.demo.js"></script>
+    <!-- <script src="node_modules/cannon/build/cannon.demo.js"></script> -->
     <script src="libs/dat.gui.js"></script>
-    <script src="libs/Three.js"></script>
-    <script src="libs/TrackballControls.js"></script>
+    <!-- <script src="libs/Three.js"></script> -->
+    <!-- <script src="libs/TrackballControls.js"></script>-->
     <script src="libs/Detector.js"></script>
     <script src="libs/Stats.js"></script>
     <script src="libs/smoothie.js"></script>
+    <script src="node_modules/three/build/three.min.js"></script>
+    <script src="node_modules/three/examples/js/controls/TrackballControls.js"></script>
+    <script src="node_modules/three/examples/js/renderers/Projector.js"></script>
+    <script src="node_modules/three/examples/js/controls/OrbitControls.js"></script>
+
     <script>
 
         var world;
         var dt = 1 / 60;
 
         var constraintDown = false;
-        var camera, scene, renderer, gplane = false, clickMarker = false;
+        var camera, scene, renderer, gplane = false, clickMarker = false, camera_mode = false, controls;
         var geometry, material, mesh;
         var time = Date.now();
 
@@ -43,19 +48,14 @@
         init();
         animate();
 
-        var theta, y, radius;
-        function setCamera() {
+        var theta = 0, y=2;
+        function getPoint(theta, centre, radius) {
             x = radius * Math.cos(theta);
             z = radius * Math.sin(theta);
             camera.position.set(x, y, z);
-            camera.lookAt(new THREE.Vector3(0, 0, 0));
         }
 
         function init() {
-
-            theta = 0;
-            y = 2;
-            radius = 10;
 
             projector = new THREE.Projector();
 
@@ -70,8 +70,8 @@
 
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.5, 10000);
             //camera.position.set(10, 4, 18);
-            setCamera();
-            // camera.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.PI/2);
+            camera.position.set(10, 2, 5);
+            camera.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
             //camera.quaternion.setFromAxisAngle(new THREE.Vector3(0,1,0), Math.PI/2+0.5);
             scene.add(camera);
 
@@ -85,28 +85,31 @@
             light.position.set(d, d, d);
 
             light.castShadow = true;
-            //light.shadowCameraVisible = true;
+            // light.shadowCameraVisible = true;
 
-            light.shadowMapWidth = 1024;
-            light.shadowMapHeight = 1024;
+            light.shadow.mapSize.width = 1024;
+            light.shadow.mapSize.height = 1024;
 
-            light.shadowCameraLeft = -d;
-            light.shadowCameraRight = d;
-            light.shadowCameraTop = d;
-            light.shadowCameraBottom = -d;
+            light.shadow.camera.left = -d;
+            light.shadow.camera.right = d;
+            light.shadow.camera.top = d;
+            light.shadow.camera.bottom = -d;
 
-            light.shadowCameraFar = 3 * d;
-            light.shadowCameraNear = d;
-            light.shadowDarkness = 0.5;
+            light.shadow.camera.far = 3 * d;
+            light.shadow.camera.near = d;
+            light.shadow.darkness = 0.9;
 
             scene.add(light);
             bbBox = []
+
             // floor
             geometry = new THREE.PlaneGeometry(100, 100, 1, 1);
             //geometry.applyMatrix( new THREE.Matrix4().makeRotationX( -Math.PI / 2 ) );
+
             material = new THREE.MeshLambertMaterial({ color: 0x777777 });
             markerMaterial = new THREE.MeshLambertMaterial({ color: 0xff0000 });
-            // THREE.ColorUtils.adjustHSV( material.color, 0, 0, 0.9 );
+            //THREE.ColorUtils.adjustHSV( material.color, 0, 0, 0.9 );
+
             mesh = new THREE.Mesh(geometry, material);
             mesh.castShadow = true;
             mesh.quaternion.setFromAxisAngle(new THREE.Vector3(1, -0, 0), -Math.PI / 2);
@@ -123,7 +126,7 @@
                 cubeMesh.castShadow = true;
                 meshes.push(cubeMesh);
                 scene.add(cubeMesh);
-                bbBox.push(new THREE.BoundingBoxHelper(cubeMesh));
+                bbBox.push(new THREE.BoxHelper(cubeMesh));
             }
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -134,25 +137,48 @@
 
             renderer.gammaInput = true;
             renderer.gammaOutput = true;
-            renderer.shadowMapEnabled = true;
+            renderer.shadowMap.enabled = true;
+            //effect = new THREE.StereoEffect( renderer );
+            //effect.setSize( window.innerWidth, window.innerHeight );
+
+            if (camera_mode) {
+                initializeControls();
+            }
 
             window.addEventListener('resize', onWindowResize, false);
-            window.addEventListener("keydown", keydown, false);
+            window.addEventListener("keyup", keyup, false);
             window.addEventListener("mousemove", onMouseMove, false);
             window.addEventListener("mousedown", onMouseDown, false);
             window.addEventListener("mouseup", onMouseUp, false);
 
         }
+        
+        function initializeControls(){
+            controls = new THREE.OrbitControls(camera, renderer.domElement);
+        }
 
-        function keydown(event) {
-            console.log("keydown", event);
-            if (event.key == 'b') {
-                theta += 0.1;
-                setCamera();
-            }
-            if (event.key == 'c') {
-                theta -= 0.1;
-                setCamera();
+        function keyup(event) {
+            console.log("Keyup", event);
+            switch (event.key) {
+                case 'b': {
+                    camera.position.set(10, 2, -5);
+                    camera.lookAt(scene.position);
+                    break;
+                }
+                case 'c': {
+                    camera.position.set(10, 2, 5);
+                    camera.lookAt(scene.position);
+                    break;
+                }
+                case 'x': {
+                    camera_mode = !camera_mode;
+                    // console.log("Camera_mode:", camera_mode, "controls:", !controls);
+                    if (camera_mode && !controls){
+                        initializeControls();
+                    }
+                    controls.enabled = camera_mode;
+                    break;
+                }
             }
         }
 
@@ -171,17 +197,32 @@
         }
 
         function onMouseMove(e) {
-            // // Move and project on the plane
-            // var entity = findNearestIntersectingObject(e.clientX,e.clientY,camera,meshes);
+            // Move and project on the plane
             if (gplane && mouseConstraint) {
                 var pos = projectOntoPlane(e.clientX, e.clientY, gplane, camera);
                 if (pos) {
                     setClickMarker(pos.x, pos.y, pos.z, scene);
                     moveJointToPoint(pos.x, pos.y, pos.z);
                 }
-                console.log("[Record] Event: ",{constraint:true, x:pos.x, y:pos.y, z:pos.z});
             }
-            // console.log("[Record] Event: ",{constraint:false, x:pos.x, y:pos.y, z:pos.z});
+            // console.log("intersectedObject", entity)
+            if (pos && entity.object.geometry instanceof THREE.BoxGeometry) {
+                var idx = meshes.indexOf(entity.object);
+
+                for (var i = 0; i < N; i++) {
+                    if (idx != i) {
+                        console.log("Intersects", bbBox[idx].box)
+                        if (bbBox[idx].box && bbBox[idx].box.isIntersectionBox(bbBox[i].box)) {
+                            flag = true;
+                            if (bbBox[idx].box.max.y - bbBox[i].box.max.y > 0) {
+                                bodies[idx].position.set(bbBox[i].box.max.x - 0.5, bbBox[i].box.max.y + 1, bbBox[i].box.max.z - 0.5)
+                            }
+                            console.log("Intersects");
+                            break;
+                        }
+                    }
+                }
+            }
         }
 
         function onMouseDown(e) {
@@ -189,18 +230,19 @@
             var entity = findNearestIntersectingObject(e.clientX, e.clientY, camera, meshes);
             var pos = entity.point;
             var flag = false;
+            console.log("findNearestIntersectingObject", entity)
             if (pos && entity.object.geometry instanceof THREE.BoxGeometry) {
                 var idx = meshes.indexOf(entity.object);
 
                 for (var i = 0; i < N; i++) {
                     if (idx != i) {
-                        console.log(bbBox[idx].box)
-                        if (bbBox[idx].box.isIntersectionBox(bbBox[i].box)) {
+                        console.log(bbBox[idx])
+                        if (bbBox[idx].box && bbBox[idx].box.isIntersectionBox(bbBox[i].box)) {
                             flag = true;
                             if (bbBox[idx].box.max.y - bbBox[i].box.max.y > 0) {
                                 bodies[idx].position.set(bbBox[i].box.max.x - 0.5, bbBox[i].box.max.y + 1, bbBox[i].box.max.z - 0.5)
                             }
-                            console.log("Intersects");
+                            // console.log("Intersects");
                             break;
                         }
                     }
@@ -215,7 +257,9 @@
 
                     if (idx !== -1) {
                         addMouseConstraint(pos.x, pos.y, pos.z, bodies[idx]);
+                        console.log("Added Mouse constraint");
                     }
+                    
                 }
             }
         }
@@ -278,24 +322,33 @@
         // Function that returns a raycaster to use to find intersecting objects
         // in a scene given screen pos and a camera, and a projector
         function getRayCasterFromScreenCoord(screenX, screenY, camera, projector) {
+
+            var raycaster = new THREE.Raycaster();
             var mouse3D = new THREE.Vector3();
+
             // Get 3D point form the client x y
             mouse3D.x = (screenX / window.innerWidth) * 2 - 1;
             mouse3D.y = -(screenY / window.innerHeight) * 2 + 1;
             mouse3D.z = 0.5;
-            return projector.pickingRay(mouse3D, camera);
+            raycaster.setFromCamera(mouse3D, camera);
+            return raycaster;
+            // return projector.pickingRay(mouse3D, camera);
         }
 
         function onWindowResize() {
             camera.aspect = window.innerWidth / window.innerHeight;
             camera.updateProjectionMatrix();
-            //controls.handleResize();
+            if (camera_mode){
+                controls.handleResize();
+            }
             renderer.setSize(window.innerWidth, window.innerHeight);
         }
 
         function animate() {
             requestAnimationFrame(animate);
-            //controls.update();
+            if (camera_mode){
+                controls.update();
+            }            
             for (var i = 0; i < N; i++) {
                 bbBox[i].update();
             }
@@ -367,7 +420,7 @@
 
             // Create a new constraint
             // The pivot for the jointBody is zero
-            //mouseConstraint = new CANNON.PointToPointConstraint(constrainedBody, pivot, jointBody, new CANNON.Vec3(0,0,0));
+            // mouseConstraint = new CANNON.PointToPointConstraint(constrainedBody, pivot, jointBody, new CANNON.Vec3(0,0,0));
             //mouseConstraint = new CANNON.HingeConstraint(constrainedBody, jointBody,pivot,new CANNON.Vec3(0,0,0));
             mouseConstraint = new CANNON.LockConstraint(constrainedBody, jointBody)
             // Add the constriant to world
