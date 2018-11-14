@@ -47,7 +47,6 @@ class BlockWorld:
         self.grid_centers = [(i, 500) for i in range(25, screen_height, 51)]
         self.blocks = pygame.sprite.Group()
         self.create_blocks(num_blocks)
-        self.file_num = 0
         pygame.init()
 
         # TODO: Camera Code
@@ -205,7 +204,6 @@ class BlockWorld:
 
             filename = "./screen_capture/%d.png" % time.time()
             pygame.image.save(self.screen, filename)
-            self.file_num += 1
 
 
 b = BlockWorld(1000, 950, 5)
