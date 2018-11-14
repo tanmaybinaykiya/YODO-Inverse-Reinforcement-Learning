@@ -3,7 +3,6 @@ import time
 
 import numpy as np
 import pygame
-# import pygame.camera
 from pygame.locals import *
 
 RED = (255, 0, 0)
@@ -204,9 +203,7 @@ class BlockWorld:
 
             pygame.display.flip()
 
-            # # TODO: Camera Code
-            # image = cam.get_image()
-            filename = "./screen_capture/%04d.png" % self.file_num
+            filename = "./screen_capture/%d.png" % time.time()
             pygame.image.save(self.screen, filename)
             self.file_num += 1
 
