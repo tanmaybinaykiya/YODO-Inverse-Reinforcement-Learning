@@ -1,4 +1,5 @@
 import time
+from enum import Enum
 
 import numpy as np
 import pygame
@@ -12,7 +13,15 @@ CYAN = (255, 255, 0)
 WHITE = (255, 255, 255)
 COLORS = [RED, BLUE, GREEN, YELLOW, CYAN, WHITE]
 
-actions_taken = []
+
+class Action(Enum):
+    MOVE_UP = 'MOVE_UP'
+    MOVE_DOWN = 'MOVE_DOWN'
+    MOVE_LEFT = 'MOVE_LEFT'
+    MOVE_RIGHT = 'MOVE_RIGHT'
+    FINISHED = 'FINISHED'
+    DROP = 'DROP'
+    PICK = 'PICK'
 
 
 class Blocks(pygame.sprite.Sprite):
@@ -39,21 +48,18 @@ class BlockWorld:
         self.record = record
         pygame.init()
 
-        self.run_environment()
-        pass
-
     @staticmethod
     def distance(pts1, pts2):
         return (pts1[0] - pts2[0]) ** 2 + (pts1[1] - pts2[1]) ** 2
 
     @staticmethod
     def are_intersecting(rect1, dx, dy, other_rect):
-        return (other_rect.top <= rect1.top+dy <= other_rect.bottom
-                and (other_rect.left <= rect1.left+dx <= other_rect.right
-                     or other_rect.left <= rect1.right+dx <= other_rect.right)) \
-               or (other_rect.top <= rect1.bottom+dy <= other_rect.bottom
-                   and (other_rect.left <= rect1.left+dx <= other_rect.right
-                        or other_rect.left <= rect1.right+dx <= other_rect.right))
+        return (other_rect.top <= rect1.top + dy < other_rect.bottom
+                and (other_rect.left <= rect1.left + dx < other_rect.right
+                     or other_rect.left < rect1.right + dx <= other_rect.right)) \
+               or (other_rect.top < rect1.bottom + dy <= other_rect.bottom
+                   and (other_rect.left <= rect1.left + dx < other_rect.right
+                        or other_rect.left < rect1.right + dx <= other_rect.right))
 
     def create_blocks(self, num_blocks=2, block_size=50):
         for i, blockCenterIdx in enumerate(np.random.choice(len(self.grid_centers), num_blocks, replace=False)):
@@ -61,29 +67,33 @@ class BlockWorld:
         pygame.display.flip()
 
     def move_block(self, action, drag, rectangle, sel_block_id):
+        action_taken = None
         if action == K_UP:
-            this_action = 'MOVE_UP'
+            action_name = Action.MOVE_UP
             dx, dy = 0, -5
         elif action == K_DOWN:
-            this_action = 'MOVE_DOWN'
+            action_name = Action.MOVE_DOWN
             dx, dy = 0, 5
         elif action == K_LEFT:
-            this_action = 'MOVE_LEFT'
+            action_name = Action.MOVE_LEFT
             dx, dy = -5, 0
         elif action == K_RIGHT:
-            this_action = 'MOVE_RIGHT'
+            action_name = Action.MOVE_RIGHT
             dx, dy = 5, 0
         else:
             raise IOError("Invalid Action", action)
 
         if drag:
-            all_dists = [not BlockWorld.are_intersecting(rectangle, dx, dy, other_block.rect) for other_block in self.blocks if other_block.rect != rectangle]
+            all_dists = [not BlockWorld.are_intersecting(rectangle, dx, dy, other_block.rect) for other_block in
+                         self.blocks if other_block.rect != rectangle]
             if all(all_dists):
-                actions_taken.append((this_action, sel_block_id))
+                action_taken = (action_name, sel_block_id)
                 rectangle.centerx += dx
                 rectangle.centery += dy
+        return action_taken
 
     def run_environment(self):
+        actions_taken = []
         running = True
         # Create the surface and pass in a tuple with its length and width
         drag = False
@@ -107,22 +117,20 @@ class BlockWorld:
                         running = False
                     elif event.key == K_RSHIFT:
                         prev_action = None
-                        actions_taken.append(('FINISHED', None))
-                        print("Finished Demonstration")
-                        print(actions_taken)
+                        actions_taken.append((Action.FINISHED, None))
+                        print("Finished Demonstration:", actions_taken)
                     elif event.key == K_SPACE:
                         print("Dropped")
                         drag = False
                         rectangle = None
-                        actions_taken.append(('DROP', sel_block_id))
+                        actions_taken.append((Action.DROP, sel_block_id))
                     elif event.key in set([K_UP, K_DOWN, K_LEFT, K_RIGHT]):
                         prev_action = event.key
                 # Check for QUIT event; if QUIT, set running to false
                 elif event.type == QUIT:
                     prev_action = None
-                    actions_taken.append(('FINISHED', None))
-                    print("Finished Demonstration")
-                    print(actions_taken)
+                    actions_taken.append((Action.FINISHED, None))
+                    print("Finished Demonstration:", actions_taken)
                     running = False
 
                 elif event.type == pygame.MOUSEBUTTONDOWN:
@@ -130,15 +138,16 @@ class BlockWorld:
                     pos = pygame.mouse.get_pos()
                     for block in self.blocks:
                         if block.rect.collidepoint(pos):
-                            print('Picked up')
                             drag = True
                             rectangle = block.rect
                             sel_block_id = block.id
-                            actions_taken.append(('PICK', block.id))
+                            actions_taken.append((Action.PICK, block.id))
                             break
 
             if prev_action:
-                self.move_block(prev_action, drag, rectangle, sel_block_id)
+                action_taken = self.move_block(prev_action, drag, rectangle, sel_block_id)
+                if action_taken:
+                    actions_taken.append(action_taken)
             for block in self.blocks:
                 self.screen.blit(block.surf, block.rect)
 
@@ -147,6 +156,14 @@ class BlockWorld:
             if self.record:
                 filename = "./screen_capture/%d.png" % time.time()
                 pygame.image.save(self.screen, filename)
+        return actions_taken
 
 
-b = BlockWorld(1000, 950, 5, record=False)
+def main():
+    block_world = BlockWorld(1000, 950, 5, record=False)
+    actions_takens = block_world.run_environment()
+    print("FINALLY:", actions_takens)
+
+
+if __name__ == "__main__":
+    main()
