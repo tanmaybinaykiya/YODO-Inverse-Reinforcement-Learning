@@ -118,8 +118,9 @@ class BlockWorld:
         for stack in self.goal_config.tolist():
             for i in range(1, len(stack)):
                 curr_block, prev_block = self.block_dict[stack[i]], self.block_dict[stack[i - 1]]
-                score += max_x + max_y - ((curr_block.rect.centerx - prev_block.rect.centerx) + (
+                score += max_x + max_y - (np.abs(prev_block.rect.centerx - curr_block.rect.centerx) + (
                     curr_block.rect.centery - prev_block.rect.centery))
+                print(i, score)
         return score
 
     @staticmethod
@@ -278,7 +279,7 @@ class BlockWorld:
 
                     # Check for QUIT event; if QUIT, set running to false
                     elif event.type == QUIT:
-                        print("writing to file")
+                        # print("writing to file")
                         prev_action = None
                         actions_taken.append((Action.FINISHED, None))
                         most_recent_action = Action.FINISHED
@@ -295,7 +296,7 @@ class BlockWorld:
                                 drag = True
                                 rectangle = block.rect
                                 sel_block_id = block.id
-                                print(frame_num)
+                                print("Frame: %d" % frame_num)
                                 actions_taken.append((Action.PICK, block.id))
                                 most_recent_action = action_to_ind[Action.PICK.value + str(block.id)]
                                 self.block_dict[block.id].surf.fill(WHITE)
@@ -378,7 +379,7 @@ def remove_frames_with_no_action():
 
 
 def main():
-    block_world = BlockWorld(1000, 950, 2, 1)
+    block_world = BlockWorld(1000, 950, 4, 1)
     block_world.run_environment(record=True)
     # remove_frames_with_no_action()
     # print("FINALLY:", actions_takens)
