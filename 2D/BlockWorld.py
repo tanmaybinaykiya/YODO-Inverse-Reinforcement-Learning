@@ -82,7 +82,7 @@ class BlockWorld:
         for stack in self.goal_config.tolist():
             for i in range(1, len(stack)):
                 curr_block, prev_block = self.block_dict[stack[i]].rect.center, self.block_dict[stack[i - 1]].rect.center
-                this_score = - np.abs(curr_block[0] - prev_block[0]) - np.abs(prev_block[1] - curr_block[1] - block_size)
+                this_score = max_x + max_y - np.abs(curr_block[0] - prev_block[0]) - np.abs(prev_block[1] - curr_block[1] - block_size)
                 print("Reward[%s, %s]:%d" % (COLORS_STR[i], COLORS_STR[i-1], this_score))
                 score += this_score
         return score
