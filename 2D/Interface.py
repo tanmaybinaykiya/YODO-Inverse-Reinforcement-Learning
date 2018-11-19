@@ -5,6 +5,11 @@ import numpy as np
 import pygame
 from collections import defaultdict
 import os
+from DQN import DQN
+import torch
+from PIL import Image
+import cv2
+
 from pygame.locals import *
 import json
 RED = (255, 0, 0)
@@ -15,10 +20,10 @@ CYAN = (255, 255, 0)
 WHITE = (255, 255, 255)
 GRAY = (50,50,50)
 COLORS = [RED, BLUE, GREEN, YELLOW, CYAN, WHITE]
-FRAME_LOCATION="2D/screen_capture"
+FRAME_LOCATION="screen_capture"
 #might require just for DQN
-ind_to_action={0:"MOVE", 1:"RIGHT", 2:"LEFT", 3:"UP", 4:"DOWN", 5:"DROP",6:"PICK0",7:"PICK1",8:"PICK2",9:"PICK3",10:"PICK4"}
-action_to_ind={"MOVE":0, "RIGHT":1, "LEFT":2, "UP":3, "DOWN":4, "DROP":5,"PICK0":6,"PICK1":7,"PICK2":8,"PICK3":9,"PICK4":10}
+ind_to_action={0:"MOVE", 1:"RIGHT", 2:"LEFT", 3:"UP", 4:"DOWN", 5:"DROP",6:"PICK0",7:"PICK1",8:"PICK2",9:"PICK3",10:"PICK4",11:"FINISHED"}
+action_to_ind={"MOVE":0, "RIGHT":1, "LEFT":2, "UP":3, "DOWN":4, "DROP":5,"PICK0":6,"PICK1":7,"PICK2":8,"PICK3":9,"PICK4":10,"FINISHED":11}
 
 class Action(Enum):
     MOVE_UP = 'MOVE_UP'
@@ -57,9 +62,22 @@ class BlockWorld:
         self.blocks = pygame.sprite.Group()
         self.create_blocks(num_blocks)
         self.block_dict={block.id:block for block in self.blocks.sprites()}
+        self.demo_id=len(list(os.walk(FRAME_LOCATION)))
+        self.demo_dir=os.path.join(FRAME_LOCATION,str(self.demo_id))
+        os.mkdir(self.demo_dir)
+        self.state_action_map=self.load_state_dict()
         pygame.init()
         pass
 
+    def load_state_dict(self):
+        if os.path.isfile("state_action_map.json"):
+            with open("state_action_map.json",'r') as f:
+                state_action_map=json.loads(f.read())
+                state_action_map[self.demo_id]={}
+        else:
+            state_action_map={}
+            state_action_map[self.demo_id]={}
+        return state_action_map
     @staticmethod
     def distance(pts1, pts2):
         return (pts1[0] - pts2[0]) ** 2 + (pts1[1] - pts2[1]) ** 2
@@ -126,7 +144,6 @@ class BlockWorld:
 
     def evaluate_reward(self,margin=5):
         self.reward=0
-
         for i in range(self.num_blocks):
             block_pos=np.where(self.goal_config==i)
             desired_neighbors=defaultdict(int,V=-1)
@@ -134,43 +151,41 @@ class BlockWorld:
                 desired_neighbors['left']=self.goal_config[block_pos[0][0]-1][block_pos[1][0]]
                 #if pygame.sprite.collide_rect(self.block_dict[i], self.block_dict[desired_neighbors['left']]:
                 if desired_neighbors['left']>=0 and self.block_dict[i].rect.centerx>self.block_dict[desired_neighbors['left']].rect.centerx and \
-                        self.block_dict[i].rect.centery > self.block_dict[desired_neighbors['left']].rect.centery-5 and \
-                        self.block_dict[i].rect.centery <self.block_dict[desired_neighbors['left']].rect.centery +5:
+                        self.block_dict[i].rect.centery > self.block_dict[desired_neighbors['left']].rect.centery-margin and \
+                        self.block_dict[i].rect.centery <self.block_dict[desired_neighbors['left']].rect.centery +margin:
                     self.reward+=1
 
             if block_pos[0][0]+1<self.num_stacks:
                 desired_neighbors['right']=self.goal_config[block_pos[0][0]+1][block_pos[1][0]]
                 if desired_neighbors['right']>=0 and self.block_dict[i].rect.centerx<self.block_dict[desired_neighbors['right']].rect.centerx and \
-                        self.block_dict[i].rect.centery > self.block_dict[desired_neighbors['right']].rect.centery - 5 and \
-                        self.block_dict[i].rect.centery < self.block_dict[desired_neighbors['right']].rect.centery + 5:
+                        self.block_dict[i].rect.centery > self.block_dict[desired_neighbors['right']].rect.centery - margin and \
+                        self.block_dict[i].rect.centery < self.block_dict[desired_neighbors['right']].rect.centery + margin:
                     self.reward+=1
 
             if block_pos[1][0]-1>=0:
                 desired_neighbors['bottom']=self.goal_config[block_pos[0][0]][block_pos[1][0]-1]
                 if desired_neighbors['bottom']>=0  and  \
                         self.block_dict[i].rect.centery - self.block_dict[desired_neighbors['bottom']].rect.centery>-55 and \
-                        self.block_dict[i].rect.centerx > self.block_dict[desired_neighbors['bottom']].rect.centerx - 5 and \
-                        self.block_dict[i].rect.centerx < self.block_dict[desired_neighbors['bottom']].rect.centerx + 5:
+                        self.block_dict[i].rect.centerx > self.block_dict[desired_neighbors['bottom']].rect.centerx - margin and \
+                        self.block_dict[i].rect.centerx < self.block_dict[desired_neighbors['bottom']].rect.centerx + margin:
                     self.reward+=1
 
             if block_pos[1][0]+1<self.num_blocks:
                 desired_neighbors['top']=self.goal_config[block_pos[0][0]][block_pos[1][0]+1]
                 if desired_neighbors['top']>=0 and \
                     self.block_dict[i].rect.centery - self.block_dict[desired_neighbors['top']].rect.centery<55 and \
-                    self.block_dict[i].rect.centerx > self.block_dict[desired_neighbors['top']].rect.centerx - 5 and \
-                    self.block_dict[i].rect.centerx < self.block_dict[desired_neighbors['top']].rect.centerx + 5:
+                    self.block_dict[i].rect.centerx > self.block_dict[desired_neighbors['top']].rect.centerx - margin and \
+                    self.block_dict[i].rect.centerx < self.block_dict[desired_neighbors['top']].rect.centerx + margin:
                     self.reward+=1
 
 
-
-
-    def run_environment(self):
+    def run_environment(self,record=True):
         actions_taken = []
         running = True
         frame_num=0
 
         #Required for DQN to map frames to actions.
-        state_action_map={}
+
         most_recent_action=None
         # Create the surface and pass in a tuple with its length and width
         drag = False
@@ -189,95 +204,153 @@ class BlockWorld:
 
         while running:
             most_recent_action=None
-            time.sleep(1. /30)
+            if self.reward<=0:
+                self.reward=-0.1
+            elif self.reward>0:
+                self.reward+=-0.01
+            #time.sleep(1. /30)
             self.screen.blit(self.master_surface, (0, 0))
 
             #rendering the goal screen
             self.screen.blit(self.goal_surface, (800, 0))
 
-            # for loop through the event queue
-            for event in pygame.event.get():
-                # Our main loop!
-                # Check for KEYDOWN event; KEYDOWN is a constant defined in pygame.locals, which we imported earlier
-                if event.type == KEYUP:
-                    prev_action = None
-                if event.type == KEYDOWN:
-                    # If the Esc key has been pressed set running to false to exit the main loop
-                    if event.key == K_ESCAPE:
-                        prev_action = None
-                        running = False
+            if record:
 
-                    elif event.key == K_RSHIFT:
+            # for loop through the event queue
+                for event in pygame.event.get():
+                    # Our main loop!
+                    # Check for KEYDOWN event; KEYDOWN is a constant defined in pygame.locals, which we imported earlier
+                    if event.type == KEYUP:
+                        prev_action = None
+                    if event.type == KEYDOWN:
+                        # If the Esc key has been pressed set running to false to exit the main loop
+                        if event.key == K_ESCAPE:
+                            prev_action = None
+                            running = False
+
+                        elif event.key == K_RSHIFT:
+                            prev_action = None
+                            actions_taken.append((Action.FINISHED, None))
+                            most_recent_action=action_to_ind[Action.FINISHED.value]
+                            done=1
+                            print("Finished Demonstration:", actions_taken)
+
+                        elif event.key == K_SPACE:
+                            print("Dropped")
+                            drag = False
+                            rectangle = None
+                            self.block_dict[sel_block_id].surf.fill(COLORS[sel_block_id])
+                            actions_taken.append((Action.DROP, sel_block_id))
+                            self.evaluate_reward()
+                            most_recent_action=action_to_ind[Action.DROP.value]
+                            print(self.reward)
+
+                        elif event.key in set([K_UP, K_DOWN, K_LEFT, K_RIGHT]):
+                            prev_action = event.key
+
+                    # Check for QUIT event; if QUIT, set running to false
+                    elif event.type == QUIT:
                         prev_action = None
                         actions_taken.append((Action.FINISHED, None))
-                        done=1
+                        most_recent_action=Action.FINISHED
+                        with open("state_action_map.json",'w') as f:
+                            json.dump(self.state_action_map,f,indent=5)
                         print("Finished Demonstration:", actions_taken)
+                        running = False
 
-                    elif event.key == K_SPACE:
-                        print("Dropped")
-                        drag = False
-                        rectangle = None
-                        actions_taken.append((Action.DROP, sel_block_id))
-                        self.evaluate_reward()
-                        most_recent_action=action_to_ind[Action.DROP.value]
-                        print(self.reward)
+                    elif event.type == pygame.MOUSEBUTTONDOWN:
+                        prev_action = None
+                        pos = pygame.mouse.get_pos()
+                        for block in self.blocks:
+                            if block.rect.collidepoint(pos):
+                                drag = True
+                                rectangle = block.rect
+                                sel_block_id = block.id
+                                print(frame_num)
+                                actions_taken.append((Action.PICK, block.id))
+                                most_recent_action=action_to_ind[Action.PICK.value+str(block.id)]
+                                self.block_dict[block.id].surf.fill(WHITE)
+                                break
 
-                    elif event.key in set([K_UP, K_DOWN, K_LEFT, K_RIGHT]):
-                        prev_action = event.key
+                if prev_action:
+                    action_taken = self.move_block(prev_action, drag, rectangle, sel_block_id)
+                    if action_taken:
+                        actions_taken.append(action_taken)
+                        most_recent_action=action_to_ind[action_taken[0].value.split("_")[1]]
 
-                # Check for QUIT event; if QUIT, set running to false
-                elif event.type == QUIT:
-                    prev_action = None
-                    actions_taken.append((Action.FINISHED, None))
-                    most_recent_action=Action.FINISHED
-                    with open("state_action_map.json",'w') as f:
-                        json.dump(state_action_map,f)
-                    print("Finished Demonstration:", actions_taken)
-                    running = False
+                #for block in self.blocks:
+                #    self.screen.blit(block.surf, block.rect)
 
-                elif event.type == pygame.MOUSEBUTTONDOWN:
-                    prev_action = None
-                    pos = pygame.mouse.get_pos()
-                    for block in self.blocks:
-                        if block.rect.collidepoint(pos):
-                            drag = True
-                            rectangle = block.rect
-                            sel_block_id = block.id
-                            actions_taken.append((Action.PICK, block.id))
-                            most_recent_action=action_to_ind[Action.PICK.value+str(block.id)]
-                            break
+                #pygame.display.flip()
+                filename = self.demo_dir +"/%d.png" % frame_num
+                frame_num+=1
+                if most_recent_action!=None:
+                    self.state_action_map[self.demo_id][frame_num]=[most_recent_action,self.reward,done]
+                for block in self.blocks:
+                    self.screen.blit(block.surf, block.rect)
+                pygame.display.flip()
+                pygame.image.save(self.screen, filename)
 
-            if prev_action:
-                action_taken = self.move_block(prev_action, drag, rectangle, sel_block_id)
-                if action_taken:
-                    actions_taken.append(action_taken)
-                    most_recent_action=action_to_ind[action_taken[0].value.split("_")[1]]
+            else:
+                dqn=DQN(12)
 
-            for block in self.blocks:
-                self.screen.blit(block.surf, block.rect)
+                dqn.load_state_dict(torch.load("dqn.pth"))
+                dqn=dqn.cuda()
+                img_string=pygame.image.tostring(self.screen, "RGB",False)
+                #Image.frombytes("RGB", (1000, 950), img_string).show()
+                curr_frame=np.asarray(Image.frombytes("RGB", (1000, 950), img_string))
+                curr_frame=cv2.resize(curr_frame,(100,95))
+                #print(curr_frame)
 
-            pygame.display.flip()
-            filename = "./screen_capture/%d.png" % frame_num
-            frame_num+=1
-            if most_recent_action!=None:
-                state_action_map[frame_num]=[most_recent_action,done]
-            #pygame.image.save(self.screen, filename)
+                action=torch.argmax(dqn(torch.Tensor(curr_frame).view(1,3,100,95))).item()
+                print(ind_to_action[action])
+                #while ind_to_action[action]!=Action.FINISHED.value:
+                #    time.sleep(1/10)
+                action=ind_to_action[action]
+                print(action)
+                for i in range(0,self.num_blocks):
+                    if action=="PICK"+str(i):
+                        sel_block_id=i
+                        self.block_dict[sel_block_id].surf.fill(WHITE)
+                if action==Action.DROP.value:
+                    self.block_dict[sel_block_id].surf.fill(COLORS[sel_block_id])
+                    sel_block_id=None
+                elif action==Action.MOVE_DOWN.value:
+                    self.block_dict[sel_block_id].centerY+=10
+                elif action==Action.MOVE_UP.value:
+                    self.block_dict[sel_block_id].centerY-=10
+                elif action==Action.MOVE_LEFT.value:
+                    self.block_dict[sel_block_id].centerX-=10
+                elif action==Action.MOVE_RIGHT.value:
+                    self.block_dict[sel_block_id].centerX+=10
+                elif action==Action.FINISHED.value:
+                    print("GAME OVER")
+                    return
+                img_string = pygame.image.tostring(self.screen, "RGB", False)
+                curr_frame = np.asarray(Image.frombytes("RGB", (1000, 950), img_string))
+                curr_frame = cv2.resize(curr_frame,(100,95))
+                action = torch.argmax(dqn(torch.Tensor(curr_frame).view(1, 3, 100, 95))).item()
+                for block in self.blocks:
+                    self.screen.blit(block.surf, block.rect)
+                pygame.display.flip()
+                if ind_to_action[action]==Action.FINISHED.value:
+                    return
 
 
 def remove_frames_with_no_action():
-    with open("C:\\Users\pramo\CS-8803-IRL-Final_Project\\2D\state_action_map.json",'r') as f:
+    with open("state_action_map.json",'r') as f:
         state_action_map=json.loads(f.read())
     files_with_actions=list(state_action_map.keys())
-    file_list=os.listdir("C:\\Users\pramo\CS-8803-IRL-Final_Project\\"+FRAME_LOCATION)
+    file_list=os.listdir(FRAME_LOCATION)
 
     for file in file_list:
         if file[:-4] not in files_with_actions:
-            os.remove(os.path.join("C:\\Users\pramo\CS-8803-IRL-Final_Project\\"+FRAME_LOCATION,file))
+            os.remove(os.path.join(FRAME_LOCATION,file))
 
 
 def main():
-    block_world = BlockWorld(1000, 950, 5, 3)
-    actions_takens = block_world.run_environment()
+    block_world = BlockWorld(1000, 950, 2, 1)
+    actions_takens = block_world.run_environment(record=False)
     #remove_frames_with_no_action()
     #print("FINALLY:", actions_takens)
 
