@@ -118,8 +118,8 @@ class BlockWorld:
         for stack in self.goal_config.tolist():
             for i in range(1, len(stack)):
                 curr_block, prev_block = self.block_dict[stack[i]], self.block_dict[stack[i - 1]]
-                score += max_x + max_y - ((prev_block.rect.centerx - curr_block.rect.centerx) + (
-                    prev_block.rect.centery - curr_block.rect.centery))
+                score += max_x + max_y - ((curr_block.rect.centerx - prev_block.rect.centerx) + (
+                    curr_block.rect.centery - prev_block.rect.centery))
         return score
 
     @staticmethod
@@ -131,9 +131,9 @@ class BlockWorld:
                    and (other_rect.left <= rect1.left + dx < other_rect.right
                         or other_rect.left < rect1.right + dx <= other_rect.right))
 
-    def create_blocks(self, num_blocks=2, block_size=50):
+    def create_blocks(self, num_blocks, block_size):
         for i, blockCenterIdx in enumerate(np.random.choice(len(self.grid_centers), num_blocks, replace=False)):
-            self.blocks.add(Blocks(i, self.grid_centers[blockCenterIdx]))
+            self.blocks.add(Blocks(i, self.grid_centers[blockCenterIdx], block_size))
         pygame.display.flip()
 
     def move_block(self, action, drag, rectangle, sel_block_id):
@@ -160,6 +160,7 @@ class BlockWorld:
                 action_taken = (action_name, sel_block_id)
                 rectangle.centerx += dx
                 rectangle.centery += dy
+        print(self.get_reward_per_state())
         return action_taken
 
     def evaluate_reward(self, margin=5):
