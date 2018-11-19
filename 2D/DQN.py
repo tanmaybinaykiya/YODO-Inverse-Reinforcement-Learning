@@ -36,10 +36,10 @@ class DQN(nn.Module):
         else:
             return torch.argmax(self.forward(state))
 
-    def forward(self, input):
+    def forward(self, x):
         if torch.cuda.is_available():
-            input = input.cuda()
-        out = self.bn1(F.relu(self.conv1(input)))
+            x = x.cuda()
+        out = self.bn1(F.relu(self.conv1(x)))
         out = self.bn2(F.relu(self.conv2(out)))
         out = F.relu(self.linear1(out.view(1, -1)))
         score = self.linear2(out)
