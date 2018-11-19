@@ -1,11 +1,13 @@
+import json
 import random
 from collections import deque
-import json
+
+import cv2
 import numpy as np
 import torch
 import torch.nn.functional as F
 from torch import nn
-import cv2
+
 
 class DQN(nn.Module):
 
@@ -36,14 +38,14 @@ class DQN(nn.Module):
 
     def forward(self, input):
         if torch.cuda.is_available():
-            input=input.cuda()
+            input = input.cuda()
         out = self.bn1(F.relu(self.conv1(input)))
         out = self.bn2(F.relu(self.conv2(out)))
-        out = F.relu(self.linear1(out.view(1,-1)))
+        out = F.relu(self.linear1(out.view(1, -1)))
         score = self.linear2(out)
         return score
 
-    def replay_experience(self,state,action,reward,done,next_state,optimizer,scheduler):
+    def replay_experience(self, state, action, reward, done, next_state, optimizer, scheduler):
         if len(self.deque) < self.batch_size:
             return
         loss = nn.MSELoss()
@@ -51,35 +53,32 @@ class DQN(nn.Module):
         for state, action, reward, next_state, done in mini_batch:
             if not done:
                 target = self.gamma * torch.max(self.forward(next_state))[0]
-                target=target+torch.FloatTensor([reward]).cuda()
+                target = target + torch.FloatTensor([reward])
                 target_present = self.forward(state)
-                target_present=target_present[:,action]
-                target=target.detach()
-                output_loss = loss(target,target_present)
+                target_present = target_present[:, action]
+                target = target.detach()
+                output_loss = loss(target, target_present)
                 optimizer.zero_grad()
                 output_loss.backward()
-                output_loss=output_loss.item()
+                output_loss = output_loss.item()
                 scheduler.step()
                 print(output_loss)
                 optimizer.step()
 
 
-
 def train():
-    policy_dqn = DQN(11)
-    target_dqn = DQN(11)
+    dqn = DQN(11)
     if torch.cuda.is_available():
-        policy_dqn=policy_dqn.cuda()
-        target_dqn=target_dqn.cuda()
+        dqn = dqn.cuda()
 
     try:
         with open('state_action_map.json') as f:
-            state_action_map_dict=json.load(f)
+            state_action_map_dict = json.load(f)
     except Exception as e:
         print(e)
     dataset = []
-    optimizer = torch.optim.RMSprop(policy_dqn.parameters(),lr=0.00001)
-    lr_scheduler=torch.optim.lr_scheduler.StepLR(optimizer,1000,0.1)
+    optimizer = torch.optim.RMSprop(dqn.parameters(), lr=0.00001)
+    lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 1000, 0.1)
 
     num_demos = 25
     for i in range(num_demos):
@@ -89,14 +88,19 @@ def train():
             print("File")
             print(file_id)
             for key in state_action_map_dict[file_id]:
-                state=np.asarray(cv2.resize(cv2.imread("screen_capture/"+str(file_id)+"/"+str(int(key)-1)+".png"),(100,95))).reshape(3,100,95)/255
-                next_state=np.asarray(cv2.resize(cv2.imread("screen_capture/"+str(file_id)+"/"+str(int(key))+".png"),(100,95))).reshape(3,100,95)/255
-                action=state_action_map_dict[file_id][key][0]
-                reward=state_action_map_dict[file_id][key][1]
-                done=state_action_map_dict[file_id][key][2]
-                dqn.add_to_deque(torch.FloatTensor([state]),action,reward,torch.FloatTensor([next_state]),done)
-                dqn.replay_experience(state,action,reward,done,next_state,optimizer,lr_scheduler)
-    torch.save(dqn.state_dict(),"dqn.pth")
+                state = np.asarray(
+                    cv2.resize(cv2.imread("screen_capture/" + str(file_id) + "/" + str(int(key) - 1) + ".png"),
+                               (100, 95))).reshape(3, 100, 95) / 255
+                next_state = np.asarray(
+                    cv2.resize(cv2.imread("screen_capture/" + str(file_id) + "/" + str(int(key)) + ".png"),
+                               (100, 95))).reshape(3, 100, 95) / 255
+                action = state_action_map_dict[file_id][key][0]
+                reward = state_action_map_dict[file_id][key][1]
+                done = state_action_map_dict[file_id][key][2]
+                dqn.add_to_deque(torch.FloatTensor([state]), action, reward, torch.FloatTensor([next_state]), done)
+                dqn.replay_experience(state, action, reward, done, next_state, optimizer, lr_scheduler)
+    torch.save(dqn.state_dict(), "dqn.pth")
 
-if __name__=="__main__":
+
+if __name__ == "__main__":
     train()
