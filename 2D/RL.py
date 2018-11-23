@@ -44,11 +44,11 @@ class RLTrainer():
     def get_next_action(self, state, q, nu):
         if len(q[state]) > 0 and np.random.rand() > nu:
             best_action = RLTrainer.get_best_action(q, state)
-            if self.debug: print("best action:", best_action)
+            if self.debug: print("Best action:", best_action)
             return best_action
         else:
             next_action = self.get_random_action(state)
-            if self.debug: print("next action:", next_action)
+            if self.debug: print("Next action:", next_action)
             return next_action
 
     def q_learning(self):
@@ -139,58 +139,42 @@ class RLTrainer():
         print("success_count: ", success_count)
 
     def random_exploration(self):
-        # curr_state is a n-tuple( (x1, y1), (x2, y2), (x3, y3), (x4, y4), selectedBlockId)
-        # q = { (state, action) : value }
-
-        states = ((), (), (), (),)
         gamma = 0.1
-
         q = defaultdict(lambda: 0)
         episode_count = 2
         prev_action = None
         for ep in range(episode_count):
-            blockWorld = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=True)
-            print("Goal: ", [COLORS_STR[i] for stack in blockWorld.goal_config for i in stack])
-            while blockWorld.get_reward() != 0:
-                blockWorld.prerender()
-                state = blockWorld.get_state_as_tuple()
+            block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=True)
+            print("Goal: ", [COLORS_STR[i] for stack in block_world.goal_config for i in stack])
+            while block_world.get_reward() != 0:
+                block_world.prerender()
+                state = block_world.get_state_as_tuple()
                 action, block_id = self.get_random_action_from_prev_action(prev_action)
-                next_state = blockWorld.get_next_state_based_on_state_tuple(state, (action, block_id))
+                next_state = block_world.get_next_state_based_on_state_tuple(state, (action, block_id))
                 q_val = gamma * max(
                     [q[next_state, b] for b in self.get_allowed_actions_from_prev_action((action, block_id))])
-                q[(blockWorld.get_state_as_tuple(), action)] = blockWorld.get_reward_for_state_tuple(state,
-                                                                                                     blockWorld.goal_config.tolist()) + q_val
-                blockWorld.update_state_from_tuple(next_state)
+                q[(block_world.get_state_as_tuple(), action)] = block_world.get_reward_for_state(state,
+                                                                                                 block_world.goal_config.tolist()) + q_val
+                block_world.update_state_from_tuple(next_state)
                 prev_action = action, block_id
-                blockWorld.render()
+                block_world.render()
                 # time.sleep(5)
 
     def random_exploration2(self):
-        states_x, states_y = 100, 100
-
-        actions = self.non_pick_actions.copy()
-        actions.append(Action.PICK)
-        action_to_idx = {action: idx for idx, action in enumerate(actions)}
-        idx_to_action = {idx: action for idx, action in enumerate(actions)}
-
-        states = np.zeros((states_x, states_y))
-        gamma = 0.1
-
-        q = np.zeros((states_x, states_y, len(self.non_pick_actions)))
         episode_count = 2
         prev_action = None
         for ep in range(episode_count):
-            blockWorld = BlockWorld(1000, 950, self.blocks_count, 1, record=True)
-            print("Goal: ", [COLORS_STR[i] for stack in blockWorld.goal_config for i in stack])
-            while blockWorld.get_reward() != 0:
-                blockWorld.prerender()
+            block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=True)
+            print("Goal: ", [COLORS_STR[i] for stack in block_world.goal_config for i in stack])
+            while block_world.get_reward() != 0:
+                block_world.prerender()
                 action, block_id = self.get_random_action_from_prev_action(prev_action)
                 print("Action chosen :", action, block_id)
                 if action != Action.DROP and action != Action.PICK:
-                    blockWorld.move_block_by_action(action, block_id)
+                    block_world.move_block_by_action(action, block_id)
 
                 prev_action = action, block_id
-                blockWorld.render()
+                block_world.render()
 
 
 def main():

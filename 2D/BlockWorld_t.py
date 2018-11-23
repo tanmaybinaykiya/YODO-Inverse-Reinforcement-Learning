@@ -5,6 +5,7 @@ import time
 
 import numpy as np
 import pygame
+from pygame.locals import *
 
 from Block import Block
 from constants import *
@@ -24,7 +25,7 @@ class BlockWorld:
         self.screen = pygame.display.set_mode((screen_width, screen_height))
         self.master_surface = pygame.Surface(self.screen.get_size())
         self.master_surface.fill((0, 0, 0))
-        self.grid_centers = [(i, screen_height//2) for i in range(25, screen_width, 50)]
+        self.grid_centers = [(i, screen_height // 2) for i in range(25, screen_width, 50)]
         self.blocks = pygame.sprite.Group()
         self.create_blocks(num_blocks, block_size)
         self.block_dict = {block.id: block for block in self.blocks.sprites()}
@@ -60,17 +61,18 @@ class BlockWorld:
         random.shuffle(block_order)
         last_used_block = 0
         blocks_per_stack = self.num_blocks // self.num_stacks
-        block_size = self.goal_screen_dim[0]//10
+        block_size = self.goal_screen_dim[0] // 10
         if self.num_stacks > 1:
-            left_padding = (self.goal_screen_dim[0] - block_size + (3 * (self.num_stacks-1) * block_size//2)) // 2
+            left_padding = (self.goal_screen_dim[0] - block_size + (3 * (self.num_stacks - 1) * block_size // 2)) // 2
         else:
-            left_padding = (self.goal_screen_dim[0] - block_size)//2
+            left_padding = (self.goal_screen_dim[0] - block_size) // 2
 
         bottom = self.goal_screen_dim[1] - 2 * block_size
         for stack_num in range(self.num_stacks):
             for i in range(blocks_per_stack):
                 pygame.draw.rect(self.goal_surface, COLORS[block_order[last_used_block]],
-                                 (stack_num * (block_size+5) + left_padding, bottom - block_size * i, block_size, block_size))
+                                 (stack_num * (block_size + 5) + left_padding, bottom - block_size * i, block_size,
+                                  block_size))
                 self.goal_config[stack_num][i] = block_order[last_used_block]
                 last_used_block += 1
 
@@ -170,7 +172,7 @@ class BlockWorld:
         self.screen.blit(self.master_surface, (0, 0))
 
         # rendering the goal screen
-        self.screen.blit(self.goal_surface, (self.screen_width-self.goal_screen_dim[0], 0))
+        self.screen.blit(self.goal_surface, (self.screen_width - self.goal_screen_dim[0], 0))
 
         pygame.event.get()
 
