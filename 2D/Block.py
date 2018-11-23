@@ -1,5 +1,7 @@
 import pygame
+
 from constants import COLORS
+
 
 class Block(pygame.sprite.Sprite):
 

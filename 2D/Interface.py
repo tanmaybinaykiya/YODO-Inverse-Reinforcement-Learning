@@ -1,7 +1,7 @@
 import json
 import os
 
-from BlockWorld import BlockWorld
+from BlockWorld_t import BlockWorld
 from constants import FRAME_LOCATION
 
 
@@ -17,8 +17,8 @@ def remove_frames_with_no_action():
 
 
 def main():
-    block_world = BlockWorld(1000, 950, 4, 1)
-    block_world.run_environment(record=True)
+    block_world = BlockWorld(1000, 950, 4, 1, record=True)
+    block_world.run_environment()
     # remove_frames_with_no_action()
     # print("FINALLY:", actions_takens)
 

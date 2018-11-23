@@ -18,7 +18,7 @@ from constants import *
 
 class BlockWorld:
 
-    def __init__(self, screen_width, screen_height, num_blocks=2, num_stacks=2, block_size=50):
+    def __init__(self, screen_width, screen_height, num_blocks=3, num_stacks=1, block_size=50):
 
         self.timer_start = time.time()
         self.screen_width = screen_width
@@ -40,6 +40,7 @@ class BlockWorld:
         os.mkdir(self.demo_dir)
         self.state_action_map = self.load_state_dict()
         pygame.init()
+        self.create_goal()
 
     def load_state_dict(self):
         if os.path.isfile("state_action_map.json"):
@@ -54,12 +55,18 @@ class BlockWorld:
     def distance(pts1, pts2):
         return (pts1[0] - pts2[0]) ** 2 + (pts1[1] - pts2[1]) ** 2
 
-    def create_goal(self, num_stacks, block_order, seed, block_size=30, goal_screen=(200, 200)):
+    def create_goal(self, block_size=30, goal_screen=(200, 200)):
+
+        # choosing the order for blocks to be placed in the goal screen.
+        block_order = [i for i in range(self.num_blocks)]
+        seed = np.random.randint(0, self.num_stacks)
+        random.shuffle(block_order)
+
         self.goal_surface = pygame.Surface(goal_screen)
         self.goal_surface.fill(GRAY)
         last_used_block = 0
-        blocks_per_stack = self.num_blocks // num_stacks
-        for stack_num in range(num_stacks):
+        blocks_per_stack = self.num_blocks // self.num_stacks
+        for stack_num in range(self.num_stacks):
             for i in range(blocks_per_stack):
                 pygame.draw.rect(self.goal_surface, COLORS[block_order[last_used_block]],
                                  (stack_num * 35 + 40, 150 - block_size * i, block_size, block_size))
@@ -76,14 +83,16 @@ class BlockWorld:
         print(self.goal_config)
 
     def get_reward_per_state(self):
-        print([COLORS_STR[i] for stack in self.goal_config for i in stack])
+        # print([COLORS_STR[i] for stack in self.goal_config for i in stack])
         score = 0
         max_x, max_y, block_size = self.screen_width, self.screen_height, self.block_size
         for stack in self.goal_config.tolist():
             for i in range(1, len(stack)):
-                curr_block, prev_block = self.block_dict[stack[i]].rect.center, self.block_dict[stack[i - 1]].rect.center
-                this_score = max_x + max_y - np.abs(curr_block[0] - prev_block[0]) - np.abs(prev_block[1] - curr_block[1] - block_size)
-                print("Reward[%s, %s]:%d" % (COLORS_STR[i], COLORS_STR[i-1], this_score))
+                curr_block, prev_block = self.block_dict[stack[i]].rect.center, self.block_dict[
+                    stack[i - 1]].rect.center
+                this_score = - np.abs(curr_block[0] - prev_block[0]) - np.abs(
+                    prev_block[1] - curr_block[1] - block_size)
+                # print("Reward[%s, %s]:%d" % (COLORS_STR[i], COLORS_STR[i - 1], this_score))
                 score += this_score
         return score
 
@@ -101,28 +110,31 @@ class BlockWorld:
             self.blocks.add(Block(i, self.grid_centers[blockCenterIdx], block_size))
         pygame.display.flip()
 
-    def move_block(self, action, drag, rectangle, sel_block_id):
-        action_taken = None
-        if action == K_UP:
-            action_name = Action.MOVE_UP
+    def move_block(self, key, drag, sel_block_id):
+        if key in key_to_action:
+            action = key_to_action[key]
+            return self.move_block_by_action[action, drag, sel_block_id]
+        else:
+            raise IOError("Invalid Key", key)
+
+    def move_block_by_action(self, action, drag, sel_block_id):
+        if action == Action.MOVE_UP:
             dx, dy = 0, -10
-        elif action == K_DOWN:
-            action_name = Action.MOVE_DOWN
+        elif action == Action.MOVE_DOWN:
             dx, dy = 0, 10
-        elif action == K_LEFT:
-            action_name = Action.MOVE_LEFT
+        elif action == Action.MOVE_LEFT:
             dx, dy = -10, 0
-        elif action == K_RIGHT:
-            action_name = Action.MOVE_RIGHT
+        elif action == Action.MOVE_RIGHT:
             dx, dy = 10, 0
         else:
             raise IOError("Invalid Action", action)
-
+        action_taken = None
+        rectangle = self.block_dict[sel_block_id].rect
         if drag:
             all_dists = [not BlockWorld.are_intersecting(rectangle, dx, dy, other_block.rect) for other_block in
                          self.blocks if other_block.rect != rectangle]
             if all(all_dists):
-                action_taken = (action_name, sel_block_id)
+                action_taken = (action, sel_block_id)
                 rectangle.centerx += dx
                 rectangle.centery += dy
         print(self.get_reward_per_state())
@@ -169,7 +181,7 @@ class BlockWorld:
                     self.block_dict[i].rect.centery - self.block_dict[desired_neighbors['top']].rect.centery < 55 and \
                     self.block_dict[
                         desired_neighbors['top']].rect.centerx - margin < self.block_dict[i].rect.centerx < \
-                        self.block_dict[desired_neighbors['top']].rect.centerx + margin:
+                    self.block_dict[desired_neighbors['top']].rect.centerx + margin:
                     self.reward += 1
 
     def run_environment(self, record=True):
@@ -179,7 +191,6 @@ class BlockWorld:
 
         # Required for DQN to map frames to actions.
 
-        most_recent_action = None
         # Create the surface and pass in a tuple with its length and width
         drag = False
         # to indicate the end of the demonstration
@@ -188,12 +199,6 @@ class BlockWorld:
         rectangle = None
         sel_block_id = None
         prev_action = None
-
-        # choosing the order for blocks to be placed in the goal screen.
-        block_order = [i for i in range(self.num_blocks)]
-        seed = np.random.randint(0, self.num_stacks)
-        random.shuffle(block_order)
-        self.create_goal(self.num_stacks, block_order, seed)
 
         while running:
             most_recent_action = None
@@ -231,7 +236,6 @@ class BlockWorld:
                         elif event.key == K_SPACE:
                             print("Dropped")
                             drag = False
-                            rectangle = None
                             self.block_dict[sel_block_id].surf.fill(COLORS[sel_block_id])
                             actions_taken.append((Action.DROP, sel_block_id))
                             self.evaluate_reward()
@@ -248,7 +252,7 @@ class BlockWorld:
                         actions_taken.append((Action.FINISHED, None))
                         most_recent_action = Action.FINISHED
                         with open("state_action_map.json", 'w') as f:
-                            json.dump(self.state_action_map, f, indent=5)
+                            json.dump(self.state_action_map, f, indent=4)
                         print("Finished Demonstration:", actions_taken)
                         running = False
 
@@ -258,7 +262,6 @@ class BlockWorld:
                         for block in self.blocks:
                             if block.rect.collidepoint(pos):
                                 drag = True
-                                rectangle = block.rect
                                 sel_block_id = block.id
                                 print("Frame: %d" % frame_num)
                                 actions_taken.append((Action.PICK, block.id))
@@ -266,8 +269,8 @@ class BlockWorld:
                                 self.block_dict[block.id].surf.fill(WHITE)
                                 break
 
-                if prev_action:
-                    action_taken = self.move_block(prev_action, drag, rectangle, sel_block_id)
+                if prev_action and prev_action != Action.DROP:
+                    action_taken = self.move_block(prev_action, drag, sel_block_id)
                     if action_taken:
                         actions_taken.append(action_taken)
                         most_recent_action = action_to_ind[action_taken[0].value.split("_")[1]]
