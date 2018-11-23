@@ -49,7 +49,7 @@ key_to_action = {
     K_RIGHT: Action.MOVE_RIGHT
 }
 
-step_size = 30
+step_size = 50
 move_action_to_deviation = {
     Action.MOVE_UP: (0, -step_size),
     Action.MOVE_DOWN: (0, step_size),
