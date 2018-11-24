@@ -1,3 +1,4 @@
+import json
 from collections import defaultdict
 
 import numpy as np
@@ -51,6 +52,20 @@ class RLTrainer():
             if self.debug: print("Next action:", next_action)
             return next_action
 
+    @staticmethod
+    def serialize_actions(actions_taken_all_demos):
+        with open("state_action_map.json", 'w') as f:
+            json.dump(actions_taken_all_demos, f, indent=2)
+
+    def demo(self):
+        episode_count = 10
+        all_actions_taken = []
+        for ep in range(episode_count):
+            block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=False)
+            goal = block_world.goal_config
+            all_actions_taken.append({"goal": goal, "actions": block_world.run_environment() })
+        RLTrainer.serialize_actions(all_actions_taken)
+
     def q_learning(self):
         gamma = 0.5
         alpha = 0.5
@@ -63,7 +78,7 @@ class RLTrainer():
             nu = 1.0
             print("Goal: ", [COLORS_STR[i] for stack in block_world.goal_config for i in stack])
             for iteration in range(self.iteration_count):
-                block_world.prerender()
+                block_world.pre_render()
 
                 curr_state = block_world.get_state_as_tuple()
                 if self.debug: print("Current State: ", curr_state)
@@ -90,7 +105,7 @@ class RLTrainer():
                 block_world.update_state_from_tuple(next_state)
 
                 block_world.render()
-                if new_reward == 0:
+                if new_reward == 1:
                     print("Goal State Reached!!! in %d iterations" % iteration)
                     success_count += 1
                     break
@@ -105,7 +120,6 @@ class RLTrainer():
 
     def q_learning_random(self):
         episode_count = 100
-        q = defaultdict(lambda: defaultdict(lambda: 0))
         success_count = 0
 
         for ep in range(episode_count):
@@ -113,25 +127,22 @@ class RLTrainer():
             nu = 1
             print("Goal: %s" % [COLORS_STR[i] for stack in block_world.goal_config for i in stack])
             for iteration in range(5000):
-                block_world.prerender()
+                block_world.pre_render()
 
                 curr_state = block_world.get_state_as_tuple()
                 action, block_id = self.get_next_action(curr_state, q, nu)
 
                 next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
-                new_reward = block_world.get_reward_for_state(next_state, block_world.goal_config)
-                if self.debug: print("Current State: ", curr_state, new_reward)
+                is_goal_next = block_world.get_reward_for_state(next_state, block_world.goal_config) == 0
+                if self.debug: print("Current State: ", curr_state, is_goal_next)
 
                 block_world.update_state_from_tuple(next_state)
 
                 block_world.render()
-                if new_reward == 0:
+                if is_goal_next:
                     print("Goal State Reached!!! in %d iterations" % iteration)
                     success_count += 1
                     break
-
-                # if iteration > 50:
-                #     nu = 0.9995 * nu
 
                 if iteration % 100 == 1:
                     print(ep, iteration, len(q), nu)
@@ -147,7 +158,7 @@ class RLTrainer():
             block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=True)
             print("Goal: ", [COLORS_STR[i] for stack in block_world.goal_config for i in stack])
             while block_world.get_reward() != 0:
-                block_world.prerender()
+                block_world.pre_render()
                 state = block_world.get_state_as_tuple()
                 action, block_id = self.get_random_action_from_prev_action(prev_action)
                 next_state = block_world.get_next_state_based_on_state_tuple(state, (action, block_id))
@@ -158,7 +169,6 @@ class RLTrainer():
                 block_world.update_state_from_tuple(next_state)
                 prev_action = action, block_id
                 block_world.render()
-                # time.sleep(5)
 
     def random_exploration2(self):
         episode_count = 2
@@ -167,7 +177,7 @@ class RLTrainer():
             block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=True)
             print("Goal: ", [COLORS_STR[i] for stack in block_world.goal_config for i in stack])
             while block_world.get_reward() != 0:
-                block_world.prerender()
+                block_world.pre_render()
                 action, block_id = self.get_random_action_from_prev_action(prev_action)
                 print("Action chosen :", action, block_id)
                 if action != Action.DROP and action != Action.PICK:
@@ -178,7 +188,8 @@ class RLTrainer():
 
 
 def main():
-    RLTrainer(states_x=350, states_y=300, blocks_count=3, iteration_count=5000, debug=False).q_learning()
+    # RLTrainer(states_x=350, states_y=300, blocks_count=3, iteration_count=5000, debug=False).q_learning()
+    RLTrainer(states_x=350, states_y=300, blocks_count=3, iteration_count=5000, debug=False).demo()
 
 
 if __name__ == '__main__':
