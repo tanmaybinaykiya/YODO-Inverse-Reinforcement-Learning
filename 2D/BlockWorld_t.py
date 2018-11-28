@@ -43,8 +43,9 @@ class BlockWorld:
     def distance(pts1, pts2):
         return (pts1[0] - pts2[0]) ** 2 + (pts1[1] - pts2[1]) ** 2
 
-    def create_goal(self):
-        goal_config = (-np.ones((self.num_stacks, self.num_blocks), dtype=np.int8)).tolist()
+    def create_goal(self, goal_config=None):
+        if goal_config is None:
+            goal_config = (-np.ones((self.num_stacks, self.num_blocks), dtype=np.int8)).tolist()
 
         # choosing the order for blocks to be placed in the goal screen.
         block_order = [i for i in range(self.num_blocks)]
@@ -76,7 +77,26 @@ class BlockWorld:
                 blocks_per_stack += 1
         return goal_config
 
-    def get_reward_for_state(self, block_states, goal_config):
+    def get_reward_for_state(self, block_states):
+        return self.get_sparse_reward_for_state(block_states)
+
+    def get_sparse_reward_for_state(self, block_states):
+        goal_config = block_states[-1]
+        score = 0
+        block_size = self.block_size
+        for stack in goal_config:
+            for i in range(1, len(stack)):
+                curr_block, prev_block = block_states[stack[i]], block_states[stack[i - 1]]
+                this_score = - np.abs(curr_block[0] - prev_block[0]) - np.abs(prev_block[1] - curr_block[1] - block_size)
+                score += this_score
+        if score == 0:
+            return 1
+        else:
+            return 0
+
+
+    def get_dense_reward_for_state(self, block_states):
+        goal_config = block_states[-1]
         score = 0
         count = 0.0
         max_x, max_y, block_size = self.screen_width, self.screen_height, self.block_size
@@ -96,11 +116,12 @@ class BlockWorld:
         return self.get_reward_for_state(block_states, self.goal_config)
 
     def get_state_as_tuple(self):
-        # curr_state is a n-tuple( (x1, y1), (x2, y2), (x3, y3), (x4, y4), selectedBlockId)
+        # curr_state is a n-tuple( (x1, y1), (x2, y2), (x3, y3), (x4, y4), selectedBlockId, (goal_config))
         some_list = [0 for _ in range(self.num_blocks + 1)]
         for block_id in self.block_dict:
             some_list[block_id] = (self.block_dict[block_id].rect.centerx, self.block_dict[block_id].rect.centery)
         some_list[-1] = self.selected_block_id
+        some_list.append(tuple([tuple(x) for x in self.goal_config]))
         return tuple(some_list)
 
     def get_state_as_dict(self):
@@ -133,12 +154,13 @@ class BlockWorld:
     def get_next_state_based_on_state_tuple(self, state, action):
         # action is (Action, blockId)
         # print("get_next_state_based_on_state_tuple: ", state, action)
-        sel_block_id = state[-1]
+        sel_block_id = state[-2]
+        if sel_block_id: assert sel_block_id < self.block_size
         state_l = list(state)
         if action[0] == Action.PICK:
-            state_l[-1] = action[1]
+            state_l[-2] = action[1]
         elif action[0] == Action.DROP:
-            state_l[-1] = None
+            state_l[-2] = None
         else:
             state_l[sel_block_id] = self.get_next_state(action[0], sel_block_id)
         return tuple(state_l)
@@ -159,7 +181,7 @@ class BlockWorld:
         return orig_pos
 
     def update_state_from_tuple(self, state_tuple):
-        sel_block_id = state_tuple[-1]
+        sel_block_id = state_tuple[-2]
         if sel_block_id is not None:
             self.block_dict[sel_block_id].rect.centerx = state_tuple[sel_block_id][0]
             self.block_dict[sel_block_id].rect.centery = state_tuple[sel_block_id][1]
@@ -191,7 +213,7 @@ class BlockWorld:
     def render(self, filename=None):
         for block in self.blocks:
             self.screen.blit(block.surf, block.rect)
-        z = pygame.display.flip()
+        pygame.display.flip()
         if filename:
             pygame.image.save(self.screen, filename)
 
@@ -204,13 +226,12 @@ class BlockWorld:
         if action == Action.PICK:
             action_value = "%s-%d" % (action_value, self.selected_block_id)
         if state is None:
-            self.actions_taken.append((self.get_state_as_dict(), action_value))
+            self.actions_taken.append({"state": self.get_state_as_dict(), "action": action_value})
         else:
-            self.actions_taken.append((state, action_value))
+            self.actions_taken.append({"state": state, "action": action_value})
 
     def run_environment(self):
         running = True
-        frame_num = 0
 
         # Required for DQN to map frames to actions.
 
@@ -219,16 +240,12 @@ class BlockWorld:
         prev_action_key = None
 
         while running:
-            # for loop through the event queue
             self.pre_render(False)
             for event in pygame.event.get():
                 state = self.get_state_as_dict()
-                # Our main loop!
-                # Check for KEYDOWN event; KEYDOWN is a constant defined in pygame.locals, which we imported earlier
                 if event.type == KEYUP:
                     prev_action_key = None
                 if event.type == KEYDOWN:
-                    # If the Esc key has been pressed set running to false to exit the main loop
                     if event.key == K_ESCAPE:
                         prev_action_key = None
                         running = False
@@ -240,7 +257,6 @@ class BlockWorld:
                         running = False
 
                     elif event.key == K_SPACE:
-                        print("Dropped")
                         self.block_dict[self.selected_block_id].surf.fill(COLORS[self.selected_block_id])
                         self.record_action(state=state, action=Action.DROP)
                         self.selected_block_id = None
@@ -275,6 +291,21 @@ class BlockWorld:
                     if action_taken:
                         self.record_action(state=state, action=action_taken[0])
 
-                frame_num += 1
                 self.render()
         return self.actions_taken
+
+    @staticmethod
+    def convert_state_dict_to_tuple(state_dict):
+        state = [tuple(state_dict["positions"][key]) for key in sorted([key for key in state_dict["positions"]], key=lambda x: int(x))]
+        selected_id = state_dict["selected"] if state_dict["selected"] != -1 else None
+        state.append(selected_id)
+        return tuple(state)
+
+    @staticmethod
+    def parse_action(action_value):
+        action_vals = action_value.split("-")
+        action = Action(action_vals[0])
+        if len(action_vals) > 1:
+            return action, int(action_vals[1])
+        else:
+            return action, None
