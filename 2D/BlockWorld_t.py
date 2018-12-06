@@ -6,6 +6,7 @@ import pygame
 from pygame.locals import *
 
 from Block import Block
+from Oracle import State
 from constants import *
 
 
@@ -48,9 +49,9 @@ class BlockWorld:
             goal_config = (-np.ones((self.num_stacks, self.num_blocks), dtype=np.int8)).tolist()
 
         # choosing the order for blocks to be placed in the goal screen.
-        block_order = [i for i in range(self.num_blocks)]
+        block_order = goal_config[0] # [i for i in range(self.num_blocks)]
         seed = np.random.randint(0, self.num_stacks)
-        random.shuffle(block_order)
+        # random.shuffle(block_order)
         last_used_block = 0
         blocks_per_stack = self.num_blocks // self.num_stacks
         block_size = self.goal_screen_dim[0] // 10
@@ -62,16 +63,13 @@ class BlockWorld:
         bottom = self.goal_screen_dim[1] - 2 * block_size
         for stack_num in range(self.num_stacks):
             for i in range(blocks_per_stack):
-                pygame.draw.rect(self.goal_surface, COLORS[block_order[last_used_block]],
-                                 (stack_num * (block_size + 5) + left_padding, bottom - block_size * i, block_size,
-                                  block_size))
+                pygame.draw.rect(self.goal_surface, COLORS[block_order[last_used_block]], (stack_num * (block_size + 5) + left_padding, bottom - block_size * i, block_size, block_size))
                 goal_config[stack_num][i] = block_order[last_used_block]
                 last_used_block += 1
 
         if self.num_blocks % 2 == 1 and last_used_block != self.num_blocks:
             while last_used_block != self.num_blocks:
-                pygame.draw.rect(self.goal_surface, COLORS[block_order[last_used_block]],
-                                 seed * 35 + 40, 150 - block_size * blocks_per_stack)
+                pygame.draw.rect(self.goal_surface, COLORS[block_order[last_used_block]], seed * 35 + 40, 150 - block_size * blocks_per_stack)
                 goal_config[seed][np.where(goal_config[seed] == -1)[0][0]] = block_order[last_used_block]
                 last_used_block += 1
                 blocks_per_stack += 1
@@ -94,7 +92,6 @@ class BlockWorld:
         else:
             return 0
 
-
     def get_dense_reward_for_state(self, block_states):
         goal_config = block_states[-1]
         score = 0
@@ -103,16 +100,14 @@ class BlockWorld:
         for stack in goal_config:
             for i in range(1, len(stack)):
                 curr_block, prev_block = block_states[stack[i]], block_states[stack[i - 1]]
-                this_score = max_x + max_y - np.abs(curr_block[0] - prev_block[0]) - np.abs(
-                    prev_block[1] - curr_block[1] - block_size)
+                this_score = max_x + max_y - np.abs(curr_block[0] - prev_block[0]) - np.abs(prev_block[1] - curr_block[1] - block_size)
                 this_score /= (max_x + max_y)
                 score += this_score
                 count += 1
         return score / count
 
     def get_reward(self):
-        block_states = {idx: (self.block_dict[idx].rect.center[0], self.block_dict[idx].rect.center[1])
-                        for idx in self.block_dict}
+        block_states = {idx: (self.block_dict[idx].rect.center[0], self.block_dict[idx].rect.center[1]) for idx in self.block_dict}
         return self.get_reward_for_state(block_states, self.goal_config)
 
     def get_state_as_tuple(self):
@@ -127,21 +122,12 @@ class BlockWorld:
     def get_state_as_dict(self):
         # curr_state is a n-tuple( (x1, y1), (x2, y2), (x3, y3), (x4, y4), selectedBlockId)
         block_dict = self.block_dict
-        state = {
-            "positions": {block_id: (block_dict[block_id].rect.centerx, block_dict[block_id].rect.centery) for block_id
-                          in block_dict},
-            "selected": self.selected_block_id if self.selected_block_id is not None else -1
-        }
+        state = {"positions": {block_id: (block_dict[block_id].rect.centerx, block_dict[block_id].rect.centery) for block_id in block_dict}, "selected": self.selected_block_id if self.selected_block_id is not None else -1}
         return state
 
     @staticmethod
     def are_intersecting(rect1, dx, dy, other_rect):
-        return (other_rect.top <= rect1.top + dy < other_rect.bottom
-                and (other_rect.left <= rect1.left + dx < other_rect.right
-                     or other_rect.left < rect1.right + dx <= other_rect.right)) \
-               or (other_rect.top < rect1.bottom + dy <= other_rect.bottom
-                   and (other_rect.left <= rect1.left + dx < other_rect.right
-                        or other_rect.left < rect1.right + dx <= other_rect.right))
+        return (other_rect.top <= rect1.top + dy < other_rect.bottom and (other_rect.left <= rect1.left + dx < other_rect.right or other_rect.left < rect1.right + dx <= other_rect.right)) or (other_rect.top < rect1.bottom + dy <= other_rect.bottom and (other_rect.left <= rect1.left + dx < other_rect.right or other_rect.left < rect1.right + dx <= other_rect.right))
 
     def create_blocks(self):
         blocks = pygame.sprite.Group()
@@ -171,8 +157,7 @@ class BlockWorld:
         else:
             raise IOError("Invalid Action", action)
         rectangle = self.block_dict[sel_block_id].rect
-        not_intersections = [not BlockWorld.are_intersecting(rectangle, dx, dy, other_block.rect) for other_block in
-                             self.blocks if other_block.rect != rectangle]
+        not_intersections = [not BlockWorld.are_intersecting(rectangle, dx, dy, other_block.rect) for other_block in self.blocks if other_block.rect != rectangle]
         orig_pos = rectangle.center
         if all(not_intersections):
             next_pos = (orig_pos[0] + dx, orig_pos[1] + dy)
@@ -192,6 +177,11 @@ class BlockWorld:
     def update_state(self, sel_block_id, next_state):
         self.block_dict[sel_block_id].rect.centerx = next_state[0]
         self.block_dict[sel_block_id].rect.centery = next_state[1]
+
+    def update_all_states(self, state: State):
+        for idx, block in enumerate(state.block_positions):
+            self.block_dict[idx].rect.center = tuple(block)
+        self.selected_block_id = state.selected_index
 
     def move_block_by_key(self, key, sel_block_id):
         return self.move_block_by_action(key_to_action[key], sel_block_id)
@@ -218,8 +208,7 @@ class BlockWorld:
             pygame.image.save(self.screen, filename)
 
     def is_in_bounding_box(self, next_pos):
-        return (self.block_size / 2) <= next_pos[0] <= (self.screen_width - self.block_size / 2) \
-               and (self.block_size / 2) <= next_pos[1] <= (self.screen_height - self.block_size / 2)
+        return (self.block_size / 2) <= next_pos[0] <= (self.screen_width - self.block_size / 2) and (self.block_size / 2) <= next_pos[1] <= (self.screen_height - self.block_size / 2)
 
     def record_action(self, state=None, action=None):
         action_value = action.value
