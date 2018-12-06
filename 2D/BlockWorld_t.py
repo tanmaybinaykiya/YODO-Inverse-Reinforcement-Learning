@@ -65,8 +65,8 @@ class BlockWorld:
         block_order = [i for i in range(self.num_blocks)]
 
         seed = np.random.randint(0, self.num_stacks)
-        #block_order=[1,0]
-        random.shuffle(block_order)
+        block_order=[0,2,3,1]
+        #random.shuffle(block_order)
         last_used_block = 0
         blocks_per_stack = self.num_blocks // self.num_stacks
         block_size = self.goal_screen_dim[0] // 10
@@ -77,20 +77,22 @@ class BlockWorld:
 
         bottom = self.goal_screen_dim[1] - 2 * block_size
         for stack_num in range(self.num_stacks):
+            self.target_blocks[stack_num]={}
             for i in range(blocks_per_stack):
                 pygame.draw.rect(self.goal_surface, COLORS[block_order[last_used_block]],
                                  (stack_num * (block_size + 5) + left_padding,  bottom-block_size * i, block_size,
                                   block_size))
                 goal_config[stack_num][i] = block_order[last_used_block]
-                if last_used_block>0:
-                    self.target_blocks[block_order[last_used_block-1]]=block_order[last_used_block]
+                if last_used_block>0 and i>0:
+                    self.target_blocks[stack_num][block_order[last_used_block-1]]=block_order[last_used_block]
                 last_used_block += 1
 
         if self.num_blocks % 2 == 1 and last_used_block != self.num_blocks:
             while last_used_block != self.num_blocks:
                 pygame.draw.rect(self.goal_surface, COLORS[block_order[last_used_block]],
-                                 seed * 35 + 40, 150-block_size * blocks_per_stack)
+                                 seed * (block_size+5) + 40, bottom-block_size * blocks_per_stack)
                 goal_config[seed][np.where(goal_config[seed] == -1)[0][0]] = block_order[last_used_block]
+                self.target_blocks[seed][block_order[last_used_block-1]]=block_order[last_used_block]
                 last_used_block += 1
                 blocks_per_stack += 1
         return goal_config
@@ -143,13 +145,19 @@ class BlockWorld:
                     if this_score==50:
                         score+=1
         '''
+        num_stacks_aligned=0
+        for stack_num in self.target_blocks:
+            flag=0
+            for key in self.target_blocks[stack_num]:
+                if self.block_dict[key].rect.centerx==self.block_dict[self.target_blocks[stack_num][key]].rect.centerx and \
+                    self.block_dict[key].rect.centery-self.block_dict[self.target_blocks[stack_num][key]].rect.centery==self.block_size:
+                    score+=1
+                    flag=1
+            if flag:
+                num_stacks_aligned+=1
 
-        for key in self.target_blocks:
-            if self.block_dict[key].rect.centerx==self.block_dict[self.target_blocks[key]].rect.centerx and \
-                self.block_dict[key].rect.centery-self.block_dict[self.target_blocks[key]].rect.centery==self.block_size:
-                score+=1
         if score>0:
-            return 100*score
+            return 50*(4**score)*num_stacks_aligned
         else:
             return 0
 
@@ -221,37 +229,40 @@ class BlockWorld:
         #for block_id in sorted(self.block_dict.keys()):
         directions = ["-", "-"]
         if self.selected_block_id!=None:
-            if self.selected_block_id in self.target_blocks:
-                target_id=self.target_blocks[self.selected_block_id]
-                some_list[0] = np.square(self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx) + \
-                                np.square(self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery)
-                if self.block_dict[self.selected_block_id].rect.centerx-self.block_dict[target_id].rect.centerx>0:
-                    directions[0]='l'
-                elif self.block_dict[self.selected_block_id].rect.centerx-self.block_dict[target_id].rect.centerx<0:
-                    directions[0]='r'
-                if self.block_dict[self.selected_block_id].rect.centery-self.block_dict[target_id].rect.centery>0:
-                    directions[1]='u'
-                elif self.block_dict[self.selected_block_id].rect.centery-self.block_dict[target_id].rect.centery<0:
-                    directions[1]='d'
+            for stack_num in self.target_blocks:
+                if self.selected_block_id in self.target_blocks[stack_num]:
+                    target_id=self.target_blocks[stack_num][self.selected_block_id]
+                    some_list[0] = np.square(self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx) + \
+                                    np.square(self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery)
+                    if self.block_dict[self.selected_block_id].rect.centerx-self.block_dict[target_id].rect.centerx>0:
+                        directions[0]='l'
+                    elif self.block_dict[self.selected_block_id].rect.centerx-self.block_dict[target_id].rect.centerx<0:
+                        directions[0]='r'
+                    if self.block_dict[self.selected_block_id].rect.centery-self.block_dict[target_id].rect.centery>0:
+                        directions[1]='u'
+                    elif self.block_dict[self.selected_block_id].rect.centery-self.block_dict[target_id].rect.centery<0:
+                        directions[1]='d'
             else:
-                for key,value in self.target_blocks.items():
-                    if value==self.selected_block_id:
-                        target_id=key
-                        some_list[0] = np.square(self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx) + \
-                                       np.square(self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery)
-                        if self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[
-                            target_id].rect.centerx > 0:
-                            directions[0] = 'l'
-                        elif self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx < 0:
-                            directions[0] = 'r'
-                        if self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery > 0:
-                            directions[1] = 'u'
-                        elif self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery < 0:
-                            directions[1] = 'd'
+                for stack_num in self.target_blocks:
+                    for key,value in self.target_blocks[stack_num].items():
+                        if value==self.selected_block_id:
+                            target_id=key
+                            some_list[0] = np.square(self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx) + \
+                                           np.square(self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery)
+                            if self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[
+                                target_id].rect.centerx > 0:
+                                directions[0] = 'l'
+                            elif self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx < 0:
+                                directions[0] = 'r'
+                            if self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery > 0:
+                                directions[1] = 'u'
+                            elif self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery < 0:
+                                directions[1] = 'd'
         else:
             distances=[]
-            for key in self.target_blocks:
-                distances.append(self.euclidean_dist(self.block_dict[key],self.block_dict[self.target_blocks[key]]))
+            for stack_num in self.target_blocks:
+                for key in self.target_blocks[stack_num]:
+                    distances.append(self.euclidean_dist(self.block_dict[key],self.block_dict[self.target_blocks[stack_num][key]]))
 
             some_list[0]=tuple(distances)
 
@@ -303,8 +314,9 @@ class BlockWorld:
             state_l[-2] = None
             state_l[1]=('-','-')
             distances=[]
-            for key in self.target_blocks:
-                distances.append(self.euclidean_dist(self.block_dict[key], self.block_dict[self.target_blocks[key]]))
+            for stack_num in self.target_blocks:
+                for key in self.target_blocks[stack_num]:
+                    distances.append(self.euclidean_dist(self.block_dict[key], self.block_dict[self.target_blocks[stack_num][key]]))
             state_l[0] = tuple(distances)
         else:
             state_l[-2] = action[1]
@@ -345,36 +357,37 @@ class BlockWorld:
             if self.selected_block_id==None:
                 self.selected_block_id=sel_block_id
             directions = ["-", "-"]
-            if sel_block_id in self.target_blocks:
-                target_id = self.target_blocks[sel_block_id]
-                state_l[0] = np.square(
-                    self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx) + \
-                                np.square(self.block_dict[self.selected_block_id].rect.centery - self.block_dict[
-                                    target_id].rect.centery)
-                if self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx > 0:
-                    directions[0] = 'l'
-                elif self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx < 0:
-                    directions[0] = 'r'
-                if self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery > 0:
-                    directions[1] = 'u'
-                elif self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery < 0:
-                    directions[1] = 'd'
-                state_l[1] = tuple(directions)
+            for stack_num in self.target_blocks:
+                if sel_block_id in self.target_blocks[stack_num]:
+                    target_id = self.target_blocks[stack_num][sel_block_id]
+                    state_l[0] = np.square(
+                        self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx) + \
+                                    np.square(self.block_dict[self.selected_block_id].rect.centery - self.block_dict[
+                                        target_id].rect.centery)
+                    if self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx > 0:
+                        directions[0] = 'l'
+                    elif self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx < 0:
+                        directions[0] = 'r'
+                    if self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery > 0:
+                        directions[1] = 'u'
+                    elif self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery < 0:
+                        directions[1] = 'd'
+                    state_l[1] = tuple(directions)
             else:
-                for key,value in self.target_blocks.items():
-                    if value==self.selected_block_id:
-                        target_id=key
-                        state_l[0] = np.square(self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx) + \
-                                       np.square(self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery)
-                        if self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx > 0:
-                            directions[0] = 'l'
-                        elif self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx < 0:
-                            directions[0] = 'r'
-                        if self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery > 0:
-                            directions[1] = 'u'
-                        elif self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery < 0:
-                            directions[1] = 'd'
-
+                for stack_num in self.target_blocks:
+                    for key,value in self.target_blocks[stack_num].items():
+                        if value==self.selected_block_id:
+                            target_id=key
+                            state_l[0] = np.square(self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx) + \
+                                           np.square(self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery)
+                            if self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx > 0:
+                                directions[0] = 'l'
+                            elif self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx < 0:
+                                directions[0] = 'r'
+                            if self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery > 0:
+                                directions[1] = 'u'
+                            elif self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery < 0:
+                                directions[1] = 'd'
         return state_l
 
 

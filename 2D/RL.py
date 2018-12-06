@@ -12,10 +12,11 @@ import pickle
 POSS_ACTIONS=[Action.MOVE_LEFT,Action.MOVE_RIGHT,Action.MOVE_UP,Action.MOVE_DOWN,Action.PICK,Action.DROP]
 class RLTrainer:
 
-    def __init__(self, states_x=800, states_y=800, blocks_count=4, iteration_count=1000, debug=False):
+    def __init__(self, states_x=800, states_y=800, blocks_count=4, stack_count=1, iteration_count=1000, debug=False):
         self.states_x = states_x
         self.states_y = states_y
         self.blocks_count = blocks_count
+        self.stack_count= stack_count
         self.non_pick_actions = [Action.MOVE_UP, Action.MOVE_DOWN, Action.MOVE_LEFT, Action.MOVE_RIGHT, Action.DROP]
         self.actions = self.non_pick_actions.copy()
         self.actions.append(Action.PICK)
@@ -129,10 +130,10 @@ class RLTrainer:
                     q[curr_state][(action, block_id)] = ((1 - alpha) * q_i) + (alpha * (new_reward + gamma * max_q))
         return q
 
-    def test_q_learning_real(self,q_old,starting_nu=0.05):
+    def test_q_learning_real(self,q_old,starting_nu=0.1):
         goal_config = [np.random.permutation(self.blocks_count).tolist()]
         nu = starting_nu
-        block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=False)
+        block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, self.stack_count, record=False)
         ever_seen_goal=False
         cnt=0
         while cnt<self.iteration_count:
@@ -146,11 +147,10 @@ class RLTrainer:
             if self.debug: print("Action: ", action, block_id)
 
             next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
-            action, block_id = self.get_next_action(curr_state, q_old, nu)
             reward=block_world.get_reward_for_state(curr_state)
             if reward>20:
                 print("Converged in %d", cnt)
-                return
+                #return
             #if self.debug:
 
             print("q:", q_old.get(str(curr_state),None))
@@ -171,8 +171,8 @@ class RLTrainer:
         #q_old = defaultdict(lambda: defaultdict(lambda: 0))
         #goal_config = [np.random.permutation(self.blocks_count).tolist()]
         nu = starting_nu
-        block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=False)
-        if self.debug: print("Goal: ", [COLORS_STR[i] for stack in block_world.goal_config for i in stack])
+        block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, self.stack_count, record=False)
+        if self.debug: print("Goal: ", [[COLORS_STR[i] for i in stack if i>=0] for stack in block_world.goal_config])
 
         ever_seen_goal = False
         cnt=0
@@ -212,7 +212,7 @@ class RLTrainer:
 
             block_world.update_state_from_tuple_pramodith(next_state)
 
-            if cnt>3000 and cnt%500==0 and nu>0.05:
+            if cnt>3000 and cnt%300==0 and nu>0.05:
                 print(cnt)
                 nu-=0.1
             #nu *= 0.9995
@@ -363,8 +363,9 @@ def test():
 
 if __name__ == '__main__':
     q=RLTrainer.load_obj("Q\q_table_target_state_no_blank")
-    use_old=False
-    RLTrainer(states_x=350, states_y=350, blocks_count=2, iteration_count=1000, debug=True).test_q_learning_real(q)
-    #for i in range(3):
-    #    RLTrainer(states_x=350, states_y=350, blocks_count=2, iteration_count=1000, debug=True).q_learning_real(use_old=use_old)
+    use_old=True
+    print(q)
+    RLTrainer(states_x=350, states_y=350, blocks_count=4,stack_count=2, iteration_count=1000, debug=True).test_q_learning_real(q)
+    #for i in range(10):
+    #    RLTrainer(states_x=350, states_y=350, blocks_count=4,stack_count=2, iteration_count=6000, debug=True).q_learning_real(use_old=use_old)
     #    use_old=True
