@@ -1,11 +1,12 @@
 import json
+import time
 from collections import defaultdict
 
 import numpy as np
 
 from BlockWorld_t import BlockWorld
 from constants import Action, COLORS_STR
-import time
+
 
 class RLTrainer:
 
@@ -95,6 +96,13 @@ class RLTrainer:
                     q[curr_state][(action, block_id)] = ((1 - alpha) * q_i) + (alpha * (new_reward + gamma * max_q))
         return q
 
+    def q_learning_fixed_goal(self, starting_nu=1.0):
+        alpha = 0.5
+        gamma = 0.5
+
+
+
+
     def q_learning_real(self, starting_nu=1.0):
         alpha = 0.5
         gamma = 0.5
@@ -102,46 +110,49 @@ class RLTrainer:
         q_old = defaultdict(lambda: defaultdict(lambda: 0))
         goal_config = [np.random.permutation(self.blocks_count).tolist()]
         nu = starting_nu
-        block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=False)
-        block_world.create_goal(goal_config)
-        if self.debug: print("Goal: ", [COLORS_STR[i] for stack in block_world.goal_config for i in stack])
 
-        ever_seen_goal = False
-        while not converged:
-            q = q_old.copy()
-            block_world.pre_render()
+        for _ in range(30):
+            block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=False)
+            block_world.create_goal(goal_config)
+            if self.debug: print("Goal: ", [COLORS_STR[i] for stack in block_world.goal_config for i in stack])
+            iter_v = 0
+            ever_seen_goal = False
+            while not converged or iter_v < 5000:
+                q = q_old.copy()
+                block_world.pre_render()
 
-            curr_state = block_world.get_state_as_tuple()
-            if self.debug: print("Current State: ", curr_state)
-            action, block_id = self.get_next_action(curr_state, q, nu)
-            if self.debug: print("Action: ", action, block_id)
+                curr_state = block_world.get_state_as_tuple()
+                if self.debug: print("Current State: ", curr_state)
+                action, block_id = self.get_next_action(curr_state, q, nu)
+                if self.debug: print("Action: ", action, block_id)
 
-            next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
-            new_reward = block_world.get_reward_for_state(next_state)
-            if self.debug: print("next_state: ", next_state)
-            if self.debug: print("new_reward: ", new_reward)
+                next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
+                new_reward = block_world.get_reward_for_state(next_state)
+                if self.debug: print("next_state: ", next_state)
+                if self.debug: print("new_reward: ", new_reward)
 
-            ever_seen_goal = ever_seen_goal or new_reward == 1
-            q_sa = q[curr_state][(action, block_id)]
+                ever_seen_goal = ever_seen_goal or new_reward == 1
+                q_sa = q[curr_state][(action, block_id)]
 
-            if len(q[next_state]) > 0:
-                max_q_dash_s_dash_a_dash = max([q[next_state][a_dash] for a_dash in q[next_state]])
-            else:
-                max_q_dash_s_dash_a_dash = 0
-            if self.debug: print("max_q:", max_q_dash_s_dash_a_dash)
+                if len(q[next_state]) > 0:
+                    max_q_dash_s_dash_a_dash = max([q[next_state][a_dash] for a_dash in q[next_state]])
+                else:
+                    max_q_dash_s_dash_a_dash = 0
+                if self.debug: print("max_q:", max_q_dash_s_dash_a_dash)
 
-            q[curr_state][(action, block_id)] += alpha * (new_reward + gamma * (max_q_dash_s_dash_a_dash - q_sa))
-            if self.debug: print("q:", q[curr_state][(action, block_id)])
+                q[curr_state][(action, block_id)] += alpha * (new_reward + gamma * max_q_dash_s_dash_a_dash - q_sa)
+                if self.debug: print("q:", q[curr_state][(action, block_id)])
 
-            block_world.update_state_from_tuple(next_state)
+                block_world.update_state_from_tuple(next_state)
 
-            nu *= 0.9995
+                nu *= 0.9995
 
-            block_world.render()
-
-            converged = ever_seen_goal and q == q_old
-            q_old = q
-            time.sleep(0.1)
+                block_world.render()
+                print("iter:", iter_v)
+                converged = ever_seen_goal and q == q_old
+                q_old = q
+                time.sleep(0.1)
+                iter_v += 1
         print(q)
 
     def q_learning(self, q=None, starting_nu=1.0, decay_nu=True, decay_rate=0.9995):
@@ -277,5 +288,4 @@ def test():
 
 
 if __name__ == '__main__':
-    RLTrainer(states_x=200, states_y=200, blocks_count=2, iteration_count=5000, debug=True) \
-        .q_learning_real()
+    RLTrainer(states_x=200, states_y=200, blocks_count=2, iteration_count=5000, debug=True).q_learning_real()

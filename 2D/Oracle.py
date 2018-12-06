@@ -1,6 +1,9 @@
 import time
 
-from BlockWorld_t import *
+import numpy as np
+
+# from BlockWorld_p import BlockWorld
+from constants import *
 
 
 class State:
@@ -78,7 +81,8 @@ class Oracle:
         position = state.get_position(block_idx)
         return [action for action in move_action_to_deviation if 0 <= position[0] + move_action_to_deviation[action][0] < self.window_width and 0 <= position[1] + move_action_to_deviation[action][1] < self.window_height]
 
-    def get_best_action(self, state, block_idx, order=True):
+    @staticmethod
+    def get_best_action(state, block_idx, order=True):
         curr_position = state.get_position(block_idx)
         goal_position = state.get_goal_position(block_idx)
 
@@ -175,7 +179,7 @@ class Oracle:
         # bring all blocks together
         actions = []
         block_count = curr_state.block_count
-        curr_state.set_goal_positions(self.get_goal_position(curr_state, self.goal_config))
+        curr_state.set_goal_positions(Oracle.get_goal_position(curr_state, self.goal_config, self.step_size))
         action = None
 
         block_world = BlockWorld(self.window_width, self.window_height, num_blocks=block_count, num_stacks=1, block_size=self.step_size)
@@ -195,7 +199,7 @@ class Oracle:
             if flip_order:
                 this_range = range(block_count)
             else:
-                this_range = range(block_count-1, -1, -1)
+                this_range = range(block_count - 1, -1, -1)
 
             for block_idx in this_range:
                 if curr_state.get_position(block_idx) != curr_state.goal_positions[block_idx]:
@@ -224,30 +228,31 @@ class Oracle:
         time.sleep(2)
         print(actions)
 
-    def get_goal_position(self, curr_state, goal_config):
+    @staticmethod
+    def get_goal_position(curr_state, goal_config, step_size):
         block_count = curr_state.block_count
         median_x = sum(curr_state.get_position(idx)[0] for idx in range(curr_state.block_count)) // curr_state.block_count
-        median_x = median_x - median_x % self.step_size
+        median_x = 25 + median_x - median_x % step_size
         median_y = sum(curr_state.get_position(idx)[1] for idx in range(curr_state.block_count)) // curr_state.block_count
-        median_y = median_y - median_y % self.step_size
+        median_y = 25 + median_y - median_y % step_size
         goal_position = [None for _ in range(block_count)]
 
         if block_count % 2 == 1:
             for idx, i in enumerate(goal_config):
-                goal_position[i] = (median_x, median_y + self.step_size * (block_count // 2 - idx))
+                goal_position[i] = (median_x, median_y + step_size * (block_count // 2 - idx))
         else:
             for idx, i in enumerate(goal_config):
-                goal_position[i] = (median_x, median_y + self.step_size * (block_count // 2 - idx))
-        print(curr_state, goal_config, goal_position)
+                goal_position[i] = (median_x, median_y + step_size * (block_count // 2 - idx))
+        # print(curr_state, goal_config, goal_position)
         return goal_position
 
     def test_get_goal_position(self):
-        goal_pos = self.get_goal_position(State([(0, 0), (0, 50), (50, 50), (500, 500)], None, None), [0, 2, 1, 3])
+        goal_pos = Oracle.get_goal_position(curr_state=State([(0, 0), (0, 50), (50, 50), (500, 500)], None, None), goal_config=[0, 2, 1, 3], step_size=self.step_size)
         print("Goal Position: ", goal_pos)
 
 
 if __name__ == '__main__':
-    block_count = 3
+    block_count = 2
     for _ in range(10):
-        oracle = Oracle(300, 300, 50, np.random.permutation(block_count), State([(150, 150), (150, 250), (250, 150)], None, None))
+        oracle = Oracle(300, 300, 50, np.random.permutation(block_count), State([(50, 150), (250, 50)], None, None))
         oracle.run()
