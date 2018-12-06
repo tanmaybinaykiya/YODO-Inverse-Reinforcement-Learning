@@ -133,7 +133,6 @@ class RLTrainer:
         goal_config = [np.random.permutation(self.blocks_count).tolist()]
         nu = starting_nu
         block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=False)
-        block_world.create_goal(goal_config)
         ever_seen_goal=False
         cnt=0
         while cnt<self.iteration_count:
@@ -149,9 +148,9 @@ class RLTrainer:
             next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
             action, block_id = self.get_next_action(curr_state, q_old, nu)
             reward=block_world.get_reward_for_state(curr_state)
-            if reward==2000:
+            if reward>20:
                 print("Converged in %d", cnt)
-                #return
+                return
             #if self.debug:
 
             print("q:", q_old.get(str(curr_state),None))
@@ -166,7 +165,7 @@ class RLTrainer:
         gamma = 0.5
         converged = False
         if use_old:
-            q_old=RLTrainer.load_obj("Q\q_table_target_state")
+            q_old=RLTrainer.load_obj("Q\q_table_target_state_no_blank")
         else:
             q_old={}
         #q_old = defaultdict(lambda: defaultdict(lambda: 0))
@@ -225,7 +224,7 @@ class RLTrainer:
             time.sleep(0.1)
         pygame.display.quit()
         #self.test_q_learning_real(q)
-        RLTrainer.save_obj(q,"Q\q_table_target_state")
+        RLTrainer.save_obj(q,"Q\q_table_target_state_no_blank")
         #with open ("Q\q_table1.json",'w') as f:
         #    json.dump(q,f,indent=5)
         print(q)
@@ -363,8 +362,8 @@ def test():
 
 
 if __name__ == '__main__':
-    q=RLTrainer.load_obj("Q\q_table_target_state")
-    use_old=True
+    q=RLTrainer.load_obj("Q\q_table_target_state_no_blank")
+    use_old=False
     RLTrainer(states_x=350, states_y=350, blocks_count=2, iteration_count=1000, debug=True).test_q_learning_real(q)
     #for i in range(3):
     #    RLTrainer(states_x=350, states_y=350, blocks_count=2, iteration_count=1000, debug=True).q_learning_real(use_old=use_old)
