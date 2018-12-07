@@ -133,7 +133,7 @@ class BlockWorld:
         if curr_state.goal_reached():
             return 10000
         else:
-            return -5
+            return 0
 
     @staticmethod
     def penalize_if_not_moved_in_goal_position(curr_state, next_state):

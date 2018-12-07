@@ -3,7 +3,7 @@ import numpy as np
 from constants import move_action_to_deviation as action_to_deviation_map
 from constants import Action
 from utilities import euclidean_dist
-
+import numpy as np
 
 class State:
 
@@ -94,9 +94,16 @@ class State:
         return target_blocks
 
     def get_medial_state_repr(self):
-        median_x = sum(self.get_position(idx)[0] for idx in range(self.block_count)) // self.block_count
-        median_y = sum(self.get_position(idx)[1] for idx in range(self.block_count)) // self.block_count
-        return tuple([(pos[0] - median_x, pos[1]-median_y) for pos in self.block_positions])
+
+        transformed_x = [(pos[0] - 25) // 50 for pos in self.block_positions]
+        transformed_y = [(pos[1] - 25) // 50 for pos in self.block_positions]
+
+        median_x = np.array(np.median(transformed_x), dtype=int)
+        median_y = np.array(np.median(transformed_y), dtype=int)
+
+        transformed_pos = [(pos[0] - median_x, pos[1] - median_y) for pos in zip(transformed_x, transformed_y)]
+
+        return tuple(transformed_pos), tuple(self.goal_config[0]), self.selected_index
 
     def get_state_as_tuple_pramodith(self):
         target_blocks = self.get_target_blocks()

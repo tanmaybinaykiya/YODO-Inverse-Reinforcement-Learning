@@ -134,23 +134,23 @@ class RLTrainer:
 
     def get_next_action_supervised_t(self, state_t, state_s, q, nu):
         rand_val = np.random.rand()
-        if rand_val < 0.33:
+        if rand_val < 0.6:
             if state_s.selected_index is None:
                 return Action.PICK, random.randint(0, state_s.block_count - 1)
             else:
                 best_action, self.order = Oracle.get_oracle_best_action(state_s, state_s.selected_index, self.order)
             self.log("Oracle action: %s", best_action)
             return best_action, state_s.selected_index
-        elif rand_val < 0.67:
-            if state_t in q and len(q[state_t]) > 0:
-                best_action = self.get_best_action(q, state_t, state_s)
-
-                if self.debug: print("Best action:", best_action)
-                return best_action
-            else:
-                next_action = self.get_random_action_s(state_s)
-                if self.debug: print("Random best action:", next_action)
-                return next_action
+        # elif rand_val < 0.67:
+        #     if state_t in q and len(q[state_t]) > 0:
+        #         best_action = self.get_best_action(q, state_t, state_s)
+        #
+        #         if self.debug: print("Best action:", best_action)
+        #         return best_action
+        #     else:
+        #         next_action = self.get_random_action_s(state_s)
+        #         if self.debug: print("Random best action:", next_action)
+        #         return next_action
         else:
             next_action = self.get_random_action_s(state_s)
             self.log("Random action:", args=next_action)
@@ -185,10 +185,11 @@ class RLTrainer:
             cnt += 1
             block_world.pre_render(True)
 
-            curr_state = block_world.get_state().get_state_as_tuple_pramodith()
+            # curr_state = block_world.get_state().get_state_as_tuple_pramodith()
+            curr_state_t = block_world.get_state().get_state_as_tuple_pramodith()
             curr_state_s = block_world.get_state()
-            self.log("State:%s, Q[%s]: %s", (curr_state_s, curr_state, q_old.get(curr_state, "EMPTY")))
-            action, block_id = self.get_next_action(curr_state, q_old, nu)
+            self.log("State:%s, Q[%s]: %s", (curr_state_s, curr_state_t, q_old.get(curr_state_t, "EMPTY")))
+            action, block_id = self.get_next_action(curr_state_t, curr_state_s, q_old, nu)
             self.log("Action: ", args=(action, block_id))
 
             next_state = block_world.get_state().get_next_state((action, block_id), block_world.get_screen_dims())
@@ -206,7 +207,7 @@ class RLTrainer:
         if q_old is None:
             q_old = {}
         nu = starting_nu
-        block_world = BlockWorld(screen_width=self.states_x, screen_height=self.states_y, goal_config=[[1,0,2]])
+        block_world = BlockWorld(screen_width=self.states_x, screen_height=self.states_y, num_blocks=self.blocks_count, goal_config=[[1,0,2]])
 
         self.log("Goal: %s", [COLORS_STR[i] for stack in block_world.get_state().goal_config for i in stack])
 
@@ -224,7 +225,8 @@ class RLTrainer:
                 q[curr_state_t] = {}
             action, block_id = self.get_next_action_supervised_t(curr_state_t, curr_state_s, q, nu)
             next_state_s = block_world.get_state().get_next_state((action, block_id), block_world.get_screen_dims())
-            next_state_p = next_state_s.get_state_as_tuple_pramodith()
+            next_state_t = next_state_s.get_medial_state_repr()
+            # next_state_p = next_state_s.get_state_as_tuple_pramodith()
             self.log("Current State: %s, \nAction: %s, \nNext_state: %s", (curr_state_s, action, next_state_s))
 
             new_reward = BlockWorld.get_reward_for_goal(curr_state_s)
@@ -241,8 +243,8 @@ class RLTrainer:
                 q_sa = 0
                 q[curr_state_t][(action, block_id)] = 0
 
-            if next_state_p in q and len(q[next_state_p]) > 0:
-                max_q_dash_s_dash_a_dash = max([q[next_state_p][a_dash] for a_dash in q[next_state_p]])
+            if next_state_t in q and len(q[next_state_t]) > 0:
+                max_q_dash_s_dash_a_dash = max([q[next_state_t][a_dash] for a_dash in q[next_state_t]])
             else:
                 max_q_dash_s_dash_a_dash = 0
             self.log("max_q: %s", max_q_dash_s_dash_a_dash)
@@ -359,9 +361,11 @@ class RLTrainer:
 def train_supervised(filename):
     print("Training supervised...")
     q = None
-    for _ in range(20):
-        q = RLTrainer(states_x=350, states_y=350, blocks_count=3, iteration_count=3000, debug=False).q_learning_supervised(q_old = q)
-    save_obj(q, filename)
+    for itc in range(500):
+        q = RLTrainer(states_x=350, states_y=350, blocks_count=3, iteration_count=100, debug=False).q_learning_supervised(q_old = q)
+        if itc%10 == 0:
+            print("ITC: %d"% itc)
+        save_obj(q, filename)
 
 
 def test_rl(q_file_name):
@@ -370,7 +374,7 @@ def test_rl(q_file_name):
     success = []
     failures = 0
     for _ in range(20):
-        result, iter_count = RLTrainer(states_x=350, states_y=350, blocks_count=3, iteration_count=1000, debug=False).test_q_learning_real(q_loaded)
+        result, iter_count = RLTrainer(states_x=350, states_y=350, blocks_count=3, iteration_count=1000, debug=True).test_q_learning_real(q_loaded)
         if result:
             print("\tSuccess", iter_count)
             success.append(iter_count)
@@ -385,7 +389,7 @@ def train_unsupervised(filename):
     q = None
     for _ in range(1):
         q = RLTrainer(states_x=350, states_y=350, blocks_count=3, iteration_count=1000, debug=False).q_learning_real(q_old=q)
-    save_obj(q, filename)
+        save_obj(q, filename)
 
 
 if __name__ == '__main__':
