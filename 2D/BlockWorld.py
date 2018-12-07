@@ -8,6 +8,7 @@ import pygame
 from Block import Block
 from State import State
 from constants import *
+from utilities import manhattan_distance, euclidean_dist
 
 
 class BlockWorld:
@@ -120,10 +121,47 @@ class BlockWorld:
                 pygame.draw.rect(self.goal_surface, COLORS[block], (stack_num * (block_size + 5) + left_padding, bottom - block_size * i, block_size, block_size))
         self.screen.blit(self.goal_surface, (self.screen_width - self.goal_screen_dim[0], 0))
 
-    def get_reward_for_state(self, state:State):
-        return self.get_sparse_reward_for_state(state)
+    @staticmethod
+    def get_reward_for_state(state: State):
+        return BlockWorld.get_manhattan_distance_reward_for_state(state)
 
-    def get_sparse_reward_for_state(self, state:State):
+    def get_manhattan_distance_reward(self):
+        return BlockWorld.get_manhattan_distance_reward_for_state(self.state)
+
+    def get_reward_for_goal(self):
+        if self.state.goal_reached():
+            print("Goal Reached....")
+            return 10000
+        else:
+            return -5
+
+    def penalize_if_not_moved_in_goal_position(self, curr_state, next_state):
+        if self.state.goal_reached() and curr_state.block_positions == next_state.block_positions:
+            return -10000
+        else:
+            return 0
+
+    def get_reward_for_drop(self, action):
+        return 500 if action == Action.DROP else 0
+
+    def get_reward_for_state_pramodith(self, state):
+        reward = 0
+        goal_reward = self.get_sparse_reward_for_state_pramodith(state)
+        if goal_reward > 0:
+            return goal_reward
+        else:
+            for block_id in range(state.block_count):
+                for block_id2 in range(state.block_count):
+                    if block_id != block_id2:
+                        if euclidean_dist(state.get_position(block_id), state.get_position(block_id2)) < 55:
+                            reward += 5
+            return reward
+
+    @staticmethod
+    def get_manhattan_distance_reward_for_state(state):
+        return -sum([manhattan_distance(block_position_i, block_position_j) for block_position_i in state.block_positions for block_position_j in state.block_positions])
+
+    def get_sparse_reward(self, state:State):
         goal_config = state.goal_config
         score = 0
         block_size = self.block_size
@@ -137,7 +175,23 @@ class BlockWorld:
         else:
             return 0
 
-    def get_dense_reward_for_state(self, block_states):
+    def get_sparse_reward_for_state_pramodith(self, state):
+        score = 0
+        target_blocks = state.get_target_blocks()
+
+        num_stacks_aligned = 1
+        for key in target_blocks:
+            target = state.get_position(key)
+            curr = state.get_position(target_blocks[key])
+            if curr[0] == target[0] and curr[1] - target[1] == self.block_size:
+                score += 1
+
+        if score > 0:
+            return 50 * (4**score) * num_stacks_aligned
+        else:
+            return 0
+
+    def get_dense_reward(self, block_states):
         goal_config = block_states[-1]
         score = 0
         count = 0.0
@@ -164,7 +218,8 @@ class BlockWorld:
         self.state = next_state
         self.update_block_state_from_state_obj()
 
-    def get_reward_for_state_action_pramodith(self, state, next_state):
+    @staticmethod
+    def get_reward_for_state_action_pramodith(state, next_state):
         if state[-2] == next_state[-2]:
             curr_dist = state[0]
             next_dist = next_state[0]

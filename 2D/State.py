@@ -86,13 +86,15 @@ class State:
         new_block_position = get_next_state(move_action).block_positions[idx]
         return not any([new_block_position == block_position for block_position in self.block_positions])
 
-    def get_state_as_tuple_pramodith(self):
-
+    def get_target_blocks(self):
         target_blocks = {}
         for i in range(len(self.goal_config[0])-1):
             target_blocks[i] = self.goal_config[0][i+1]
         target_blocks[len(self.goal_config[0])-1] = self.goal_config[0][-2]
+        return target_blocks
 
+    def get_state_as_tuple_pramodith(self):
+        target_blocks = self.get_target_blocks()
         some_list = [-1 for _ in range(3)]
         directions = ["-", "-"]
         if self.selected_index is not None:
@@ -166,8 +168,8 @@ class State:
         return {
             "left": center[0] - self.block_size // 2,
             "right": center[0] + self.block_size // 2,
-            "bottom": center[1] - self.block_size // 2,
-            "top": center[1] + self.block_size // 2
+            "bottom": center[1] + self.block_size // 2,
+            "top": center[1] - self.block_size // 2
         }
 
     @staticmethod
