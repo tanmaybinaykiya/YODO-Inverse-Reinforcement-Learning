@@ -2,7 +2,7 @@ import numpy as np
 
 from constants import move_action_to_deviation as action_to_deviation_map
 from constants import Action
-from utilities import euclidean_dist
+from utilities import euclidean_dist, sgn, manhattan_distance
 import numpy as np
 
 class State:
@@ -43,7 +43,7 @@ class State:
     def get_selected(self):
         return self.selected_index
 
-    def get_goal_position(self, block_index):
+    def get_goal_position(self, block_index) -> list:
         return self.goal_positions[block_index]
 
     def set_goal_positions(self, goal_positions):
@@ -74,7 +74,7 @@ class State:
         return "Positions: %s, Goal: %s, Selected: %s" % (self.block_positions, self.goal_positions, self.selected_index)
 
     def goal_reached(self):
-        return self.block_positions == self.goal_positions
+        return all([self.block_positions[idx][0] == self.block_positions[idx + 1][0]  and self.block_positions[idx][1] - self.block_positions[idx + 1][1] == -self.block_size for idx in range(self.block_count-1)])
 
     def is_action_allowed(self, move_action, idx):
         def get_next_state(action):
@@ -94,12 +94,50 @@ class State:
         return target_blocks
 
     def get_medial_state_repr(self):
+        if self.selected_index is not None:
+            pos = self.get_position(self.selected_index)
+            transformed_pos = (pos[0] - 25) // 50, (pos[1] - 25) // 50
+            goal = self.get_goal_position(self.selected_index)
+            transformed_goal = (goal[0] - 25) // 50, (goal[1] - 25) // 50
+            return sgn(transformed_pos[0]-transformed_goal[0]), sgn(transformed_pos[1]-transformed_goal[1]), manhattan_distance(transformed_pos, transformed_goal)
+        else:
+            transformed_x = [(pos[0] - 25) // 50 for pos in self.block_positions]
+            transformed_y = [(pos[1] - 25) // 50 for pos in self.block_positions]
+
+            goal_x = [(pos[0] - 25) // 50 for pos in self.goal_positions]
+            goal_y = [(pos[1] - 25) // 50 for pos in self.goal_positions]
+
+            transformed_pos = [(sgn(ix - gx), sgn(iy - gy)) for ix, iy, gx, gy in zip(transformed_x, transformed_y, goal_x, goal_y)]
+
+            return tuple(transformed_pos)
+
+    def get_medial_state_repr_old(self):
+
+        transformed_x = [(pos[0] - 25) // 50 for pos in self.block_positions]
+        transformed_y = [(pos[1] - 25) // 50 for pos in self.block_positions]
+
+        goal_x = [(pos[0] - 25) // 50 for pos in self.goal_positions]
+        goal_y = [(pos[1] - 25) // 50 for pos in self.goal_positions]
+
+        transformed_pos = [(sgn(ix - gx), sgn(iy - gy)) for ix, iy, gx, gy in zip(transformed_x, transformed_y, goal_x, goal_y)]
+
+        return tuple(transformed_pos), tuple(self.goal_config[0]), self.selected_index
+
+    def get_medial_state_repr_older(self):
 
         transformed_x = [(pos[0] - 25) // 50 for pos in self.block_positions]
         transformed_y = [(pos[1] - 25) // 50 for pos in self.block_positions]
 
         median_x = np.array(np.median(transformed_x), dtype=int)
         median_y = np.array(np.median(transformed_y), dtype=int)
+
+        def sgn(a):
+            if a < 0:
+                return -1
+            elif a == 0:
+                return 0
+            else:
+                return 1
 
         transformed_pos = [(pos[0] - median_x, pos[1] - median_y) for pos in zip(transformed_x, transformed_y)]
 

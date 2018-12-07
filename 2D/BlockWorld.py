@@ -131,6 +131,7 @@ class BlockWorld:
     @staticmethod
     def get_reward_for_goal(curr_state):
         if curr_state.goal_reached():
+            print("Goal reached")
             return 10000
         else:
             return 0
@@ -217,6 +218,7 @@ class BlockWorld:
 
     def update_state(self, next_state: State):
         self.state = next_state
+        self.state.compute_goal_positions()
         self.update_block_state_from_state_obj()
 
     @staticmethod
