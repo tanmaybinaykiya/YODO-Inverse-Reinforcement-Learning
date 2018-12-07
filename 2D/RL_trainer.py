@@ -8,7 +8,8 @@ import pygame
 from BlockWorld import BlockWorld
 from constants import Action, COLORS_STR
 from utilities import load_obj, save_obj
-
+from State import State
+from Oracle import Oracle
 # FILE_NAME = "Q/q_table_target_state_no_blank"
 
 POSS_ACTIONS = [Action.MOVE_LEFT, Action.MOVE_RIGHT, Action.MOVE_UP, Action.MOVE_DOWN, Action.PICK, Action.DROP]
@@ -54,7 +55,7 @@ class RLTrainer:
         poss_actions = self.get_allowed_actions_from_prev_action(prev_actn)
         return poss_actions[np.random.randint(0, len(poss_actions))]
 
-    def get_best_action(self, q, state):
+    def get_best_action_state_p(self, q, state):
         if state[-2] is None:
             max_q = [(a, q[state].get(a, 0)) for a in self.pick_action_block_pairs]
         else:
@@ -68,124 +69,90 @@ class RLTrainer:
         else:
             return max_actions[np.argmax(max_values)]
 
-    def get_random_action(self, state):
+    def get_best_action(self, q, state_t, state: State):
+        if state.selected_index is None:
+            max_q = [(a, q[state_t].get(a, 0)) for a in self.pick_action_block_pairs]
+        else:
+            max_q = [((a, state.selected_index), q[state_t].get((a, state.selected_index), 0)) for a in self.non_pick_actions]
+        max_values = [max_q[i][1] for i in range(len(max_q))]
+        max_actions = [max_q[i][0] for i in range(len(max_q))]
+        if max_values.count(max(max_values)) > 1:
+            max_locs = np.where(np.asarray(max_values) == max(max_values))[0]
+            np.random.shuffle(max_locs)
+            return max_actions[int(max_locs[0])]
+        else:
+            return max_actions[np.argmax(max_values)]
+
+    def get_random_action_s(self, state: State):
+        if state.selected_index is None:
+            return Action.PICK, np.random.randint(0, self.blocks_count)
+        else:
+            poss_actions = [(a, state.selected_index) for a in self.non_pick_actions]
+            return poss_actions[np.random.randint(0, len(poss_actions))]
+
+    def get_random_action_p(self, state):
         if state[-2] is None:
             return Action.PICK, np.random.randint(0, self.blocks_count)
         else:
             poss_actions = [(a, state[-2]) for a in self.non_pick_actions]
             return poss_actions[np.random.randint(0, len(poss_actions))]
 
-    def get_next_action(self, state, q, nu):
+    def get_next_action(self, state_t, state, q, nu):
         if state in q and len(q[state]) > 0 and np.random.rand() > nu:
-            best_action = self.get_best_action(q, state)
+            best_action = self.get_best_action(q, state_t, state)
 
             self.log("Best action:", args=best_action)
             return best_action
         else:
-            next_action = self.get_random_action(state)
+            next_action = self.get_random_action_s(state)
             self.log("Next action:", args=next_action)
             return next_action
 
-    @staticmethod
-    def get_oracle_best_action(state, block_idx, order=True):
-        curr_position = state.get_position(block_idx)
-        goal_position = state.get_goal_position(block_idx)
-
-        if order:
-            if goal_position[0] < curr_position[0]:
-                if state.is_action_allowed(Action.MOVE_LEFT, block_idx):
-                    return Action.MOVE_LEFT, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx):
-                        return Action.MOVE_DOWN, not order
-                    elif state.is_action_allowed(Action.MOVE_UP, block_idx):
-                        return Action.MOVE_UP, not order
-
-            elif goal_position[0] > curr_position[0]:
-                if state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
-                    return Action.MOVE_RIGHT, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx):
-                        return Action.MOVE_DOWN, not order
-                    elif state.is_action_allowed(Action.MOVE_UP, block_idx):
-                        return Action.MOVE_UP, not order
-            elif goal_position[1] > curr_position[1]:
-                if state.is_action_allowed(Action.MOVE_DOWN, block_idx):
-                    return Action.MOVE_DOWN, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx):
-                        return Action.MOVE_LEFT, not order
-                    elif state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
-                        return Action.MOVE_RIGHT, not order
-
-            elif goal_position[1] < curr_position[1]:
-                if state.is_action_allowed(Action.MOVE_UP, block_idx):
-                    return Action.MOVE_UP, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx):
-                        return Action.MOVE_LEFT, not order
-                    elif state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
-                        return Action.MOVE_RIGHT, not order
-            else:
-                return Action.DROP, order
-        else:
-            if goal_position[1] > curr_position[1]:
-                if state.is_action_allowed(Action.MOVE_DOWN, block_idx):
-                    return Action.MOVE_DOWN, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx):
-                        return Action.MOVE_LEFT, not order
-                    elif state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
-                        return Action.MOVE_RIGHT, not order
-            elif goal_position[1] < curr_position[1]:
-                if state.is_action_allowed(Action.MOVE_UP, block_idx):
-                    return Action.MOVE_UP, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx):
-                        return Action.MOVE_LEFT, not order
-                    elif state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
-                        return Action.MOVE_RIGHT, not order
-            elif goal_position[0] < curr_position[0]:
-                if state.is_action_allowed(Action.MOVE_LEFT, block_idx):
-                    return Action.MOVE_LEFT, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx):
-                        return Action.MOVE_DOWN, not order
-                    elif state.is_action_allowed(Action.MOVE_UP, block_idx):
-                        return Action.MOVE_UP, not order
-
-            elif goal_position[0] > curr_position[0]:
-                if state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
-                    return Action.MOVE_RIGHT, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx):
-                        return Action.MOVE_DOWN, not order
-                    elif state.is_action_allowed(Action.MOVE_UP, block_idx):
-                        return Action.MOVE_UP, not order
-
-        return Action.DROP, order
-
-    def get_next_action_supervised(self, state, state_s, q, nu):
+    def get_next_action_supervised_p(self, state_p, state_s, q, nu):
         rand_val = np.random.rand()
         if rand_val < 0.33:
             if state_s.selected_index is None:
                 return Action.PICK, random.randint(0, state_s.block_count - 1)
             else:
-                best_action, self.order = RLTrainer.get_oracle_best_action(state_s, state_s.selected_index, self.order)
+                best_action, self.order = Oracle.get_oracle_best_action(state_s, state_s.selected_index, self.order)
             self.log("Oracle action: %s", best_action)
             return best_action, state_s.selected_index
         elif rand_val < 0.67:
-            if state in q and len(q[state]) > 0:
-                best_action = self.get_best_action(q, state)
+            if state_p in q and len(q[state_p]) > 0:
+                best_action = self.get_best_action(q, state_p)
 
                 if self.debug: print("Best action:", best_action)
                 return best_action
             else:
-                next_action = self.get_random_action(state)
+                next_action = self.get_random_action_p(state_p)
                 if self.debug: print("Random best action:", next_action)
                 return next_action
         else:
-            next_action = self.get_random_action(state)
+            next_action = self.get_random_action_p(state_p)
+            self.log("Random action:", args=next_action)
+            return next_action
+
+    def get_next_action_supervised_t(self, state_t, state_s, q, nu):
+        rand_val = np.random.rand()
+        if rand_val < 0.33:
+            if state_s.selected_index is None:
+                return Action.PICK, random.randint(0, state_s.block_count - 1)
+            else:
+                best_action, self.order = Oracle.get_oracle_best_action(state_s, state_s.selected_index, self.order)
+            self.log("Oracle action: %s", best_action)
+            return best_action, state_s.selected_index
+        elif rand_val < 0.67:
+            if state_t in q and len(q[state_t]) > 0:
+                best_action = self.get_best_action(q, state_t, state_s)
+
+                if self.debug: print("Best action:", best_action)
+                return best_action
+            else:
+                next_action = self.get_random_action_s(state_s)
+                if self.debug: print("Random best action:", next_action)
+                return next_action
+        else:
+            next_action = self.get_random_action_s(state_s)
             self.log("Random action:", args=next_action)
             return next_action
 
@@ -251,16 +218,16 @@ class RLTrainer:
 
             cnt += 1
             curr_state_s = block_world.get_state()
-            curr_state_p = curr_state_s.get_state_as_tuple_pramodith()
+            curr_state_t = curr_state_s.get_medial_state_repr()
 
-            if curr_state_p not in q:
-                q[curr_state_p] = {}
-            action, block_id = self.get_next_action_supervised(curr_state_p, curr_state_s, q, nu)
+            if curr_state_t not in q:
+                q[curr_state_t] = {}
+            action, block_id = self.get_next_action_supervised_t(curr_state_t, curr_state_s, q, nu)
             next_state_s = block_world.get_state().get_next_state((action, block_id), block_world.get_screen_dims())
             next_state_p = next_state_s.get_state_as_tuple_pramodith()
             self.log("Current State: %s, \nAction: %s, \nNext_state: %s", (curr_state_s, action, next_state_s))
 
-            new_reward = block_world.get_reward_for_goal()
+            new_reward = BlockWorld.get_reward_for_goal(curr_state_s)
             # new_reward = block_world.get_reward_for_state_pramodith(curr_state_s)
             # new_reward += block_world.get_reward_for_state_action_pramodith(curr_state_p, next_state_p)
 
@@ -268,11 +235,11 @@ class RLTrainer:
                 self.log("Next State: %s, New Reward: %s", (next_state_s, new_reward))
 
             ever_seen_goal = ever_seen_goal or new_reward == 1
-            if (action, block_id) in q[curr_state_p]:
-                q_sa = q[curr_state_p][(action, block_id)]
+            if (action, block_id) in q[curr_state_t]:
+                q_sa = q[curr_state_t][(action, block_id)]
             else:
                 q_sa = 0
-                q[curr_state_p][(action, block_id)] = 0
+                q[curr_state_t][(action, block_id)] = 0
 
             if next_state_p in q and len(q[next_state_p]) > 0:
                 max_q_dash_s_dash_a_dash = max([q[next_state_p][a_dash] for a_dash in q[next_state_p]])
@@ -280,8 +247,8 @@ class RLTrainer:
                 max_q_dash_s_dash_a_dash = 0
             self.log("max_q: %s", max_q_dash_s_dash_a_dash)
 
-            q[curr_state_p][(action, block_id)] += alpha * (new_reward + gamma * max_q_dash_s_dash_a_dash - q_sa)
-            self.log("q: %s", q[curr_state_p][(action, block_id)])
+            q[curr_state_t][(action, block_id)] += alpha * (new_reward + gamma * max_q_dash_s_dash_a_dash - q_sa)
+            self.log("q: %s", q[curr_state_t][(action, block_id)])
 
             block_world.update_state(next_state_s)
             block_world.render()
@@ -299,7 +266,7 @@ class RLTrainer:
         block_world = BlockWorld(self.states_x, self.states_y, goal_config=[[1,0,2]], num_blocks=self.blocks_count, num_stacks=1, record=False)
         self.log("Goal: ", [COLORS_STR[i] for stack in block_world.get_state().goal_config for i in stack])
 
-        ever_seen_goal = False
+        # ever_seen_goal = False
         cnt = 0
         q = q_old.copy()
         while cnt < self.iteration_count:
@@ -307,14 +274,16 @@ class RLTrainer:
             # while not converged:
             block_world.pre_render(True)
             curr_state_s = block_world.get_state()
-            curr_state_p = curr_state_s.get_state_as_tuple_pramodith()
+            # curr_state_p = curr_state_s.get_state_as_tuple_pramodith()
+            curr_state_t = curr_state_s.get_medial_state_repr()
 
-            if curr_state_p not in q:
-                q[curr_state_p] = {}
+            if curr_state_t not in q:
+                q[curr_state_t] = {}
 
-            action, block_id = self.get_next_action(curr_state_p, q, nu)
+            action, block_id = self.get_next_action(curr_state_t, curr_state_s, q, nu)
             next_state_s = block_world.get_state().get_next_state((action, block_id), block_world.get_screen_dims())
-            next_state_p = next_state_s.get_state_as_tuple_pramodith()
+            # next_state_p = next_state_s.get_state_as_tuple_pramodith()
+            next_state_t = next_state_s.get_medial_state_repr()
             self.log("Current State: %s, \nAction: %s, \nNext_state: %s", (curr_state_s, action, next_state_s))
 
             new_reward = block_world.get_reward_for_goal()
@@ -329,21 +298,21 @@ class RLTrainer:
             # if new_reward != 0:
             #     self.log("Next State: %s, New Reward: %s", (next_state_s, new_reward))
 
-            ever_seen_goal = ever_seen_goal or new_reward == 1
-            if (action, block_id) in q[curr_state_p]:
-                q_sa = q[curr_state_p][(action, block_id)]
+            # ever_seen_goal = ever_seen_goal or new_reward == 1
+            if (action, block_id) in q[curr_state_t]:
+                q_sa = q[curr_state_t][(action, block_id)]
             else:
                 q_sa = 0
-                q[curr_state_p][(action, block_id)] = 0
+                q[curr_state_t][(action, block_id)] = 0
 
-            if next_state_p in q and len(q[next_state_p]) > 0:
-                max_q_dash_s_dash_a_dash = max([q[next_state_p][a_dash] for a_dash in q[next_state_p]])
+            if next_state_t in q and len(q[next_state_t]) > 0:
+                max_q_dash_s_dash_a_dash = max([q[next_state_t][a_dash] for a_dash in q[next_state_t]])
             else:
                 max_q_dash_s_dash_a_dash = 0
             self.log("Max Q: %s", max_q_dash_s_dash_a_dash)
 
-            q[curr_state_p][(action, block_id)] += alpha * (new_reward + gamma * max_q_dash_s_dash_a_dash - q_sa)
-            self.log("Q[%s]: %s" %(curr_state_p, q[curr_state_p][(action, block_id)]))
+            q[curr_state_t][(action, block_id)] += alpha * (new_reward + gamma * max_q_dash_s_dash_a_dash - q_sa)
+            self.log("Q[%s]: %s" %(curr_state_t, q[curr_state_t][(action, block_id)]))
 
             block_world.update_state(next_state_s)
             block_world.render()

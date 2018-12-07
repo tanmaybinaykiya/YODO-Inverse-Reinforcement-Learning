@@ -93,6 +93,11 @@ class State:
         target_blocks[len(self.goal_config[0])-1] = self.goal_config[0][-2]
         return target_blocks
 
+    def get_medial_state_repr(self):
+        median_x = sum(self.get_position(idx)[0] for idx in range(self.block_count)) // self.block_count
+        median_y = sum(self.get_position(idx)[1] for idx in range(self.block_count)) // self.block_count
+        return tuple([(pos[0] - median_x, pos[1]-median_y) for pos in self.block_positions])
+
     def get_state_as_tuple_pramodith(self):
         target_blocks = self.get_target_blocks()
         some_list = [-1 for _ in range(3)]
@@ -199,3 +204,18 @@ class State:
             if self.is_in_bounding_box(next_pos, self.block_size, screen_dims):
                 return next_pos
         return orig_pos
+
+
+def test_get_goal_position():
+    # goal_pos = get_goal_position(curr_state=State([(0, 0), (0, 50), (50, 50), (500, 500)], None, None), goal_config=[0, 2, 1, 3], step_size=self.step_size)
+    # print("Goal Position: ", goal_pos)
+    pass
+
+
+def test_get_medial_position_rep():
+    medial_state_rep = State(block_positions=[[10, 20], [20, 10], [30, 30]], selected_index=1, goal_config=[[0, 2, 1]]).get_medial_state_repr()
+    print("Medial: ", medial_state_rep)
+
+
+if __name__ == '__main__':
+    test_get_medial_position_rep()

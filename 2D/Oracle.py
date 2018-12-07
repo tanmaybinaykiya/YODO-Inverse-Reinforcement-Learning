@@ -2,70 +2,8 @@ import time
 
 import numpy as np
 
-# from BlockWorld_p import BlockWorld
+from State import State
 from constants import *
-
-
-class State:
-
-    def __init__(self, block_positions, goal_positions, selected_index):
-        """
-        :type selected_index: nullable int
-        :type goal_positions: list[tuple(int)]
-        :type block_positions: list[tuple(int)]
-        """
-        self.block_positions = block_positions
-        self.block_count = len(block_positions)
-        self.goal_positions = goal_positions
-        self.selected_index = selected_index
-
-    def get_position(self, block_index):
-        return self.block_positions[block_index]
-
-    def get_selected(self):
-        return self.selected_index
-
-    def get_goal_position(self, block_index):
-        return self.goal_positions[block_index]
-
-    def set_goal_positions(self, goal_positions):
-        self.goal_positions = goal_positions
-
-    def get_tuple(self):
-        return tuple(self.block_positions), tuple(self.goal_positions), self.selected_index
-
-    def get_next_state(self, idx, action):
-        new_state: State = self.copy()
-        old_position: tuple = self.block_positions[idx]
-        new_state.block_positions[idx] = (old_position[0] + move_action_to_deviation[action][0], old_position[1] + move_action_to_deviation[action][1])
-        return new_state
-
-    def update_state(self, idx, position):
-        self.block_positions[idx] = position
-
-    def select(self, idx):
-        self.selected_index = idx
-
-    def deselect(self):
-        self.selected_index = None
-
-    def copy(self):
-        return self.__deepcopy__()
-
-    def __deepcopy__(self, memodict={}):
-        return State(self.block_positions.copy(), self.goal_positions.copy(), self.selected_index)
-
-    def __repr__(self):
-        return "Positions: %s, Goal: %s, Selected: %s" % (self.block_positions, self.goal_positions, self.selected_index)
-
-    def goal_reached(self):
-        return self.block_positions == self.goal_positions
-
-    def is_action_allowed(self, move_action, idx):
-        next_state = self.get_next_state(idx, move_action)
-        locn = next_state.block_positions[idx]
-        z = [locn == block_posn for block_posn in self.block_positions]
-        return not any(z)
 
 
 class Oracle:
@@ -82,7 +20,7 @@ class Oracle:
         return [action for action in move_action_to_deviation if 0 <= position[0] + move_action_to_deviation[action][0] < self.window_width and 0 <= position[1] + move_action_to_deviation[action][1] < self.window_height]
 
     @staticmethod
-    def get_best_action(state, block_idx, order=True):
+    def get_oracle_best_action(state, block_idx, order=True):
         curr_position = state.get_position(block_idx)
         goal_position = state.get_goal_position(block_idx)
 
@@ -227,12 +165,6 @@ class Oracle:
                 # break
         time.sleep(2)
         print(actions)
-
-
-    def test_get_goal_position(self):
-        goal_pos = Oracle.get_goal_position(curr_state=State([(0, 0), (0, 50), (50, 50), (500, 500)], None, None), goal_config=[0, 2, 1, 3], step_size=self.step_size)
-        print("Goal Position: ", goal_pos)
-
 
 if __name__ == '__main__':
     block_count = 2

@@ -128,16 +128,17 @@ class BlockWorld:
     def get_manhattan_distance_reward(self):
         return BlockWorld.get_manhattan_distance_reward_for_state(self.state)
 
-    def get_reward_for_goal(self):
-        if self.state.goal_reached():
-            print("Goal Reached....")
+    @staticmethod
+    def get_reward_for_goal(curr_state):
+        if curr_state.goal_reached():
             return 10000
         else:
             return -5
 
-    def penalize_if_not_moved_in_goal_position(self, curr_state, next_state):
-        if self.state.goal_reached() and curr_state.block_positions == next_state.block_positions:
-            return -10000
+    @staticmethod
+    def penalize_if_not_moved_in_goal_position(curr_state, next_state):
+        if curr_state.goal_reached() and curr_state.block_positions == next_state.block_positions:
+            return -1000
         else:
             return 0
 
