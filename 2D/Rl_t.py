@@ -7,9 +7,8 @@ import numpy as np
 import pygame
 import random
 
-from BlockWorld_p import BlockWorld
+from BlockWorld_t import BlockWorld
 from constants import Action, COLORS_STR
-# from Oracle import Oracle
 
 # FILE_NAME = "Q/q_table_target_state_no_blank"
 
@@ -295,7 +294,7 @@ class RLTrainer:
         # q_old = defaultdict(lambda: defaultdict(lambda: 0))
         # goal_config = [np.random.permutation(self.blocks_count).tolist()]
         nu = starting_nu
-        block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=False)
+        block_world = BlockWorld(screen_width =self.states_x, screen_height = self.states_y)
         # block_world.create_goal(goal_config = [[1,0,2]])
 
         if self.debug: print("Goal: ", [COLORS_STR[i] for stack in block_world.goal_config for i in stack])
@@ -304,18 +303,20 @@ class RLTrainer:
         cnt = 0
         q = q_old.copy()
         while cnt < self.iteration_count:
+            block_world.pre_render(True)
+
             cnt += 1
             # while not converged:
-            block_world.pre_render()
-            curr_state = block_world.get_state_as_tuple_pramodith()
-            curr_state_s = block_world.get_state_as_state()
+            curr_state = block_world.get_state().get_state_as_tuple_pramodith()
+            curr_state_s = block_world.get_state()
             if curr_state not in q:
                 q[curr_state] = {}
-            if self.debug: print("Current State: ", curr_state)
+            # if self.debug: print("Current State: ", curr_state_s)
             action, block_id = self.get_next_action_supervised(curr_state, curr_state_s, q, nu)
-            if self.debug: print("Action: ", action, block_id)
-            next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
-            new_reward = block_world.get_reward_for_state_tanmay()
+            # if self.debug: print("Action: ", action, block_id)
+            next_state = block_world.get_state().get_next_state((action, block_id), block_world.get_screen_dims())
+            print("Current State: %s, \nAction: %s, \nNext_state: %s" %(curr_state_s, action, next_state))
+            new_reward = block_world.get_reward_for_state(next_state)
             # new_reward += block_world.get_reward_for_state_action_pramodith(curr_state, next_state)
 
             if new_reward != 0:
@@ -338,7 +339,7 @@ class RLTrainer:
             q[curr_state][(action, block_id)] += alpha * (new_reward + gamma * (max_q_dash_s_dash_a_dash) - q_sa)
             if self.debug: print("q:", q[curr_state][(action, block_id)])
 
-            block_world.update_state_from_tuple_pramodith(next_state)
+            block_world.update_state(next_state)
 
             if cnt > 3000 and cnt % 500 == 0 and nu > 0.05:
                 print(cnt)
@@ -347,7 +348,8 @@ class RLTrainer:
 
             block_world.render()
 
-            converged = ever_seen_goal and q == q_old
+
+            # converged = ever_seen_goal and q == q_old
             # q_old = q
             # time.sleep(1)
         pygame.display.quit()
@@ -566,7 +568,7 @@ if __name__ == '__main__':
 
     # train_supervised
     for i in range(1):
-        RLTrainer(states_x=350, states_y=350, blocks_count=3, iteration_count=10000, debug=False).q_learning_supervised_new(use_old=False)
+        RLTrainer(states_x=350, states_y=350, blocks_count=3, iteration_count=10000, debug=True).q_learning_supervised_new(use_old=False)
         use_old = True
 
     q = RLTrainer.load_obj(FILE_NAME)

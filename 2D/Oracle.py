@@ -188,7 +188,7 @@ class Oracle:
         block_world.create_goal([b_w_g_c])
 
         block_world.pre_render()
-        block_world.update_all_states(curr_state)
+        block_world.update_all_block_states(curr_state)
         block_world.render()
 
         flip_order = True
@@ -213,7 +213,7 @@ class Oracle:
                             print(block_idx, curr_state, action)
                             actions.append(action)
                             curr_state = Oracle.get_next_state(curr_state, action, block_idx)
-                            block_world.update_all_states(curr_state)
+                            block_world.update_all_block_states(curr_state)
                             block_world.render()
                         else:
                             break
@@ -228,23 +228,6 @@ class Oracle:
         time.sleep(2)
         print(actions)
 
-    @staticmethod
-    def get_goal_position(curr_state, goal_config, step_size):
-        block_count = curr_state.block_count
-        median_x = sum(curr_state.get_position(idx)[0] for idx in range(curr_state.block_count)) // curr_state.block_count
-        median_x = 25 + median_x - median_x % step_size
-        median_y = sum(curr_state.get_position(idx)[1] for idx in range(curr_state.block_count)) // curr_state.block_count
-        median_y = 25 + median_y - median_y % step_size
-        goal_position = [None for _ in range(block_count)]
-
-        if block_count % 2 == 1:
-            for idx, i in enumerate(goal_config):
-                goal_position[i] = (median_x, median_y + step_size * (block_count // 2 - idx))
-        else:
-            for idx, i in enumerate(goal_config):
-                goal_position[i] = (median_x, median_y + step_size * (block_count // 2 - idx))
-        # print(curr_state, goal_config, goal_position)
-        return goal_position
 
     def test_get_goal_position(self):
         goal_pos = Oracle.get_goal_position(curr_state=State([(0, 0), (0, 50), (50, 50), (500, 500)], None, None), goal_config=[0, 2, 1, 3], step_size=self.step_size)

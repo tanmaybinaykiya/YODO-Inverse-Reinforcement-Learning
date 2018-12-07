@@ -62,8 +62,8 @@ class BlockWorld:
         block_order = [i for i in range(self.num_blocks)]
 
         seed = np.random.randint(0, self.num_stacks)
-        # block_order=[1,0]
-        random.shuffle(block_order)
+        block_order = [2, 0, 1]
+        # random.shuffle(block_order)
         last_used_block = 0
         blocks_per_stack = self.num_blocks // self.num_stacks
         block_size = self.goal_screen_dim[0] // 10
@@ -104,6 +104,18 @@ class BlockWorld:
                 return -1
         return 0
 
+    def get_reward_for_state_tanmay(self):
+        reward = 0
+        for block_id in range(len(self.block_dict)):
+            for block_id2 in range(len(self.block_dict)):
+                if block_id != block_id2:
+                    reward += 10000/self.euclidean_dist(self.block_dict[block_id], self.block_dict[block_id2])
+
+        reward += 1000 if self.get_state_as_state().goal_reached() else 0
+
+        return reward
+
+
     def get_reward_for_state(self, block_states):
         reward = 0
         goal_reward = self.get_sparse_reward_for_state_pramodith(block_states)
@@ -114,7 +126,7 @@ class BlockWorld:
                 for block_id2 in range(len(self.block_dict)):
                     if block_id != block_id2:
                         if self.euclidean_dist(self.block_dict[block_id], self.block_dict[block_id2]) < 55:
-                            reward += 5
+                            reward += 0
             return reward
 
     def get_sparse_reward_for_state_pramodith(self, block_states):
@@ -252,6 +264,7 @@ class BlockWorld:
         block_dict = self.block_dict
         state = State(block_positions=[(block_dict[block_id].rect.centerx, block_dict[block_id].rect.centery) for block_id in block_dict], goal_positions=None, selected_index=None)
         goal_conf = self.goal_config[0].copy()
+        goal_conf.reverse()
         goal_positions = Oracle.get_goal_position(curr_state=state, goal_config=goal_conf, step_size=self.block_size)
 
         return State(block_positions= state.block_positions, goal_positions=goal_positions, selected_index = self.selected_block_id)
@@ -393,9 +406,6 @@ class BlockWorld:
         pygame.display.flip()
         if filename:
             pygame.image.save(self.screen, filename)
-
-    def is_in_bounding_box(self, next_pos):
-        return (self.block_size / 2) <= next_pos[0] <= (self.screen_width - self.block_size / 2) and (self.block_size / 2) <= next_pos[1] <= (self.screen_height - self.block_size / 2)
 
     def record_action(self, state=None, action=None):
         action_value = action.value

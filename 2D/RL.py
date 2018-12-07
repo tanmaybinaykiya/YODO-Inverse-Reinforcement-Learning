@@ -101,8 +101,6 @@ class RLTrainer:
         gamma = 0.5
 
 
-
-
     def q_learning_real(self, starting_nu=1.0):
         alpha = 0.5
         gamma = 0.5
