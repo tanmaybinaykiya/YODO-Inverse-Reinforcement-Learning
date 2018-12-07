@@ -1,334 +1,181 @@
-import json
 import os
 import random
 import time
-from collections import defaultdict
 
-import cv2
 import numpy as np
 import pygame
-import torch
-from PIL import Image
-from pygame.locals import *
 
 from Block import Block
-from DQN import DQN
+from State import State
 from constants import *
 
 
 class BlockWorld:
 
-    def __init__(self, screen_width, screen_height, num_blocks=3, num_stacks=1, block_size=50):
-
-        self.timer_start = time.time()
+    def __init__(self, screen_width=500, screen_height=500, init_config=None, goal_config=None, selected_id=None, num_blocks=3, num_stacks=1, block_size=50, record=False):
         self.screen_width = screen_width
         self.screen_height = screen_height
+        self.goal_screen_dim = (self.screen_width // 5, self.screen_width // 5)
         self.num_stacks = num_stacks
         self.num_blocks = num_blocks
-        self.reward = 0
         self.block_size = block_size
-        self.goal_config = -np.ones((self.num_stacks, self.num_blocks), dtype=np.int8)
+
+        self.record = record
+        if self.record:
+            self.demo_id = len(list(os.walk(FRAME_LOCATION)))
+            self.demo_dir = os.path.join(FRAME_LOCATION, str(self.demo_id))
+            os.mkdir(self.demo_dir)
+
         self.screen = pygame.display.set_mode((screen_width, screen_height))
         self.master_surface = pygame.Surface(self.screen.get_size())
         self.master_surface.fill((0, 0, 0))
-        self.grid_centers = [(i, 500) for i in range(25, screen_width, 50)]
-        self.blocks = pygame.sprite.Group()
-        self.create_blocks(num_blocks, block_size)
-        self.block_dict = {block.id: block for block in self.blocks.sprites()}
-        self.demo_id = len(list(os.walk(FRAME_LOCATION)))
-        self.demo_dir = os.path.join(FRAME_LOCATION, str(self.demo_id))
-        os.mkdir(self.demo_dir)
-        self.state_action_map = self.load_state_dict()
-        pygame.init()
-        self.create_goal()
 
-    def load_state_dict(self):
-        if os.path.isfile("state_action_map.json"):
-            with open("state_action_map.json", 'r') as f:
-                state_action_map = json.loads(f.read())
-                state_action_map[self.demo_id] = {}
-        else:
-            state_action_map = {self.demo_id: {}}
-        return state_action_map
+        self.goal_surface = pygame.Surface(self.goal_screen_dim)
+        self.goal_surface.fill(GRAY)
+
+        self.blocks = pygame.sprite.Group()
+        self.block_dict = {}
+
+        # if goal_config is not None:
+        #     self.goal_config = goal_config
+        # else:
+        #     self.goal_config = BlockWorld.create_goal(num_blocks)
+        self.state = self.initialize_state(init_config, goal_config, selected_id)
+        self.create_block_dicts()
+
+        pygame.init()
+        self.pre_render(True)
+        self.render()
+        self.pre_render(True)
+        self.selected_block_id = None
+        self.actions_taken = []
+
+    def get_screen_dims(self):
+        return self.screen_width, self.screen_height
+
+    def get_state(self) -> State:
+        return self.state
+
+    def initialize_state(self, init_config, goal_config, selected_id):
+        if goal_config is None:
+            goal_config = BlockWorld.create_goal(self.num_blocks)
+
+        if init_config is None:
+            bs = self.block_size
+            init_config = [[bs // 2 + bs * np.random.randint(6), bs // 2 + bs * np.random.randint(6)] for _ in range(self.num_blocks)]
+
+        return State(block_positions=init_config, selected_index=selected_id, goal_config=goal_config)
+
+    def create_block_dicts(self):
+        for i, block_position in enumerate(self.state.block_positions):
+            this_block = Block(i, (block_position[0], block_position[1]), self.block_size)
+            self.blocks.add(this_block)
+            self.block_dict[i] = this_block
+
+    def update_block_dicts(self):
+        for i in self.block_dict:
+            self.block_dict[i].rect.centerx = self.state.get_position(i)[0]
+            self.block_dict[i].rect.centery = self.state.get_position(i)[1]
 
     @staticmethod
     def distance(pts1, pts2):
         return (pts1[0] - pts2[0]) ** 2 + (pts1[1] - pts2[1]) ** 2
 
-    def create_goal(self, block_size=30, goal_screen=(200, 200)):
-
-        # choosing the order for blocks to be placed in the goal screen.
-        block_order = [i for i in range(self.num_blocks)]
-        seed = np.random.randint(0, self.num_stacks)
-        random.shuffle(block_order)
-
-        self.goal_surface = pygame.Surface(goal_screen)
-        self.goal_surface.fill(GRAY)
-        last_used_block = 0
-        blocks_per_stack = self.num_blocks // self.num_stacks
-        for stack_num in range(self.num_stacks):
-            for i in range(blocks_per_stack):
-                pygame.draw.rect(self.goal_surface, COLORS[block_order[last_used_block]],
-                                 (stack_num * 35 + 40, 150 - block_size * i, block_size, block_size))
-                self.goal_config[stack_num][i] = block_order[last_used_block]
-                last_used_block += 1
-
-        if self.num_blocks % 2 == 1 and last_used_block != self.num_blocks:
-            while last_used_block != self.num_blocks:
-                pygame.draw.rect(self.goal_surface, COLORS[block_order[last_used_block]],
-                                 seed * 35 + 40, 150 - block_size * blocks_per_stack)
-                self.goal_config[seed][np.where(self.goal_config[seed] == -1)[0][0]] = block_order[last_used_block]
-                last_used_block += 1
-                blocks_per_stack += 1
-        print(self.goal_config)
-
-    def get_reward_per_state(self):
-        # print([COLORS_STR[i] for stack in self.goal_config for i in stack])
-        score = 0
-        max_x, max_y, block_size = self.screen_width, self.screen_height, self.block_size
-        for stack in self.goal_config.tolist():
-            for i in range(1, len(stack)):
-                curr_block, prev_block = self.block_dict[stack[i]].rect.center, self.block_dict[
-                    stack[i - 1]].rect.center
-                this_score = - np.abs(curr_block[0] - prev_block[0]) - np.abs(
-                    prev_block[1] - curr_block[1] - block_size)
-                # print("Reward[%s, %s]:%d" % (COLORS_STR[i], COLORS_STR[i - 1], this_score))
-                score += this_score
-        return score
-
     @staticmethod
-    def are_intersecting(rect1, dx, dy, other_rect):
-        return (other_rect.top <= rect1.top + dy < other_rect.bottom
-                and (other_rect.left <= rect1.left + dx < other_rect.right
-                     or other_rect.left < rect1.right + dx <= other_rect.right)) \
-               or (other_rect.top < rect1.bottom + dy <= other_rect.bottom
-                   and (other_rect.left <= rect1.left + dx < other_rect.right
-                        or other_rect.left < rect1.right + dx <= other_rect.right))
+    def create_goal(num_blocks):
+        block_order = list(range(num_blocks))
+        random.shuffle(block_order)
+        return [block_order]
 
-    def create_blocks(self, num_blocks, block_size):
-        for i, blockCenterIdx in enumerate(np.random.choice(len(self.grid_centers), num_blocks, replace=False)):
-            self.blocks.add(Block(i, self.grid_centers[blockCenterIdx], block_size))
+    # unused
+    def pre_render(self, drop_events=False):
+        self.screen.blit(self.master_surface, (0, 0))
+        self.screen.blit(self.goal_surface, (self.screen_width - self.goal_screen_dim[0], 0))
+        if drop_events:
+            pygame.event.get()
+
+    def render(self, filename=None):
+        self.update_block_dicts()
+        self.render_blocks()
+        self.render_goal()
         pygame.display.flip()
+        if filename and self.record:
+            pygame.image.save(self.screen, filename)
 
-    def move_block(self, key, drag, sel_block_id):
-        if key in key_to_action:
-            action = key_to_action[key]
-            return self.move_block_by_action[action, drag, sel_block_id]
+    def render_blocks(self):
+        for block in self.blocks:
+            self.screen.blit(block.surf, block.rect)
+
+    def render_goal(self):
+        self.goal_surface.fill(GRAY)
+        block_size = self.goal_screen_dim[0] // 10
+        if self.num_stacks > 1:
+            left_padding = (self.goal_screen_dim[0] - block_size + (3 * (self.num_stacks - 1) * block_size // 2)) // 2
         else:
-            raise IOError("Invalid Key", key)
+            left_padding = (self.goal_screen_dim[0] - block_size) // 2
 
-    def move_block_by_action(self, action, drag, sel_block_id):
-        if action == Action.MOVE_UP:
-            dx, dy = 0, -10
-        elif action == Action.MOVE_DOWN:
-            dx, dy = 0, 10
-        elif action == Action.MOVE_LEFT:
-            dx, dy = -10, 0
-        elif action == Action.MOVE_RIGHT:
-            dx, dy = 10, 0
+        bottom = self.goal_screen_dim[1] - 2 * block_size
+        for stack_num, stack in enumerate(self.state.goal_config):
+            for i, block in enumerate(stack):
+                pygame.draw.rect(self.goal_surface, COLORS[block], (stack_num * (block_size + 5) + left_padding, bottom - block_size * i, block_size, block_size))
+        self.screen.blit(self.goal_surface, (self.screen_width - self.goal_screen_dim[0], 0))
+
+    def get_reward_for_state(self, state:State):
+        return self.get_sparse_reward_for_state(state)
+
+    def get_sparse_reward_for_state(self, state:State):
+        goal_config = state.goal_config
+        score = 0
+        block_size = self.block_size
+        for stack in goal_config:
+            for i in range(1, len(stack)):
+                curr_block, prev_block = self.state.get_position(stack[i]), self.state.get_position(stack[i - 1])
+                this_score = - np.abs(curr_block[0] - prev_block[0]) - np.abs(prev_block[1] - curr_block[1] - block_size)
+                score += this_score
+        if score == 0:
+            return 1
         else:
-            raise IOError("Invalid Action", action)
-        action_taken = None
-        rectangle = self.block_dict[sel_block_id].rect
-        if drag:
-            all_dists = [not BlockWorld.are_intersecting(rectangle, dx, dy, other_block.rect) for other_block in
-                         self.blocks if other_block.rect != rectangle]
-            if all(all_dists):
-                action_taken = (action, sel_block_id)
-                rectangle.centerx += dx
-                rectangle.centery += dy
-        print(self.get_reward_per_state())
-        return action_taken
+            return 0
 
-    def evaluate_reward(self, margin=5):
-        self.reward = 0
-        for i in range(self.num_blocks):
-            block_pos = np.where(self.goal_config == i)
-            desired_neighbors = defaultdict(int, V=-1)
-            if block_pos[0][0] - 1 >= 0:
-                desired_neighbors['left'] = self.goal_config[block_pos[0][0] - 1][block_pos[1][0]]
-                # if pygame.sprite.collide_rect(self.block_dict[i], self.block_dict[desired_neighbors['left']]:
-                if desired_neighbors['left'] >= 0 and self.block_dict[i].rect.centerx > self.block_dict[
-                    desired_neighbors['left']].rect.centerx and \
-                    self.block_dict[
-                        desired_neighbors['left']].rect.centery - margin < self.block_dict[i].rect.centery < \
-                    self.block_dict[desired_neighbors['left']].rect.centery + margin:
-                    self.reward += 1
+    def get_dense_reward_for_state(self, block_states):
+        goal_config = block_states[-1]
+        score = 0
+        count = 0.0
+        max_x, max_y, block_size = self.screen_width, self.screen_height, self.block_size
+        for stack in goal_config:
+            for i in range(1, len(stack)):
+                curr_block, prev_block = block_states[stack[i]], block_states[stack[i - 1]]
+                this_score = max_x + max_y - np.abs(curr_block[0] - prev_block[0]) - np.abs(prev_block[1] - curr_block[1] - block_size)
+                this_score /= (max_x + max_y)
+                score += this_score
+                count += 1
+        return score / count
 
-            if block_pos[0][0] + 1 < self.num_stacks:
-                desired_neighbors['right'] = self.goal_config[block_pos[0][0] + 1][block_pos[1][0]]
-                if desired_neighbors['right'] >= 0 and self.block_dict[i].rect.centerx < self.block_dict[
-                    desired_neighbors['right']].rect.centerx and \
-                    self.block_dict[
-                        desired_neighbors['right']].rect.centery - margin < self.block_dict[i].rect.centery < \
-                    self.block_dict[desired_neighbors['right']].rect.centery + margin:
-                    self.reward += 1
+    def update_block_state_from_state_obj(self):
+        sel_block_id = self.state.selected_index
+        if sel_block_id is not None:
+            self.block_dict[sel_block_id].rect.centerx = self.state.block_positions[sel_block_id][0]
+            self.block_dict[sel_block_id].rect.centery = self.state.block_positions[sel_block_id][1]
+            self.selected_block_id = sel_block_id
+        else:
+            self.selected_block_id = None
 
-            if block_pos[1][0] - 1 >= 0:
-                desired_neighbors['bottom'] = self.goal_config[block_pos[0][0]][block_pos[1][0] - 1]
-                if desired_neighbors['bottom'] >= 0 and \
-                    self.block_dict[i].rect.centery - self.block_dict[
-                    desired_neighbors['bottom']].rect.centery > -55 and \
-                    self.block_dict[
-                        desired_neighbors['bottom']].rect.centerx - margin < self.block_dict[i].rect.centerx < \
-                    self.block_dict[
-                        desired_neighbors['bottom']].rect.centerx + margin:
-                    self.reward += 1
+    def update_state(self, next_state: State):
+        self.state = next_state
+        self.update_block_state_from_state_obj()
 
-            if block_pos[1][0] + 1 < self.num_blocks:
-                desired_neighbors['top'] = self.goal_config[block_pos[0][0]][block_pos[1][0] + 1]
-                if desired_neighbors['top'] >= 0 and \
-                    self.block_dict[i].rect.centery - self.block_dict[desired_neighbors['top']].rect.centery < 55 and \
-                    self.block_dict[
-                        desired_neighbors['top']].rect.centerx - margin < self.block_dict[i].rect.centerx < \
-                    self.block_dict[desired_neighbors['top']].rect.centerx + margin:
-                    self.reward += 1
-
-    def run_environment(self, record=True):
-        actions_taken = []
-        running = True
-        frame_num = 0
-
-        # Required for DQN to map frames to actions.
-
-        # Create the surface and pass in a tuple with its length and width
-        drag = False
-        # to indicate the end of the demonstration
-        done = 0
-
-        rectangle = None
-        sel_block_id = None
-        prev_action = None
-
-        while running:
-            most_recent_action = None
-            if self.reward <= 0:
-                self.reward = -0.1
-            elif self.reward > 0:
-                self.reward += -0.01
-            # time.sleep(1. /30)
-            self.screen.blit(self.master_surface, (0, 0))
-
-            # rendering the goal screen
-            self.screen.blit(self.goal_surface, (800, 0))
-
-            if record:
-
-                # for loop through the event queue
-                for event in pygame.event.get():
-                    # Our main loop!
-                    # Check for KEYDOWN event; KEYDOWN is a constant defined in pygame.locals, which we imported earlier
-                    if event.type == KEYUP:
-                        prev_action = None
-                    if event.type == KEYDOWN:
-                        # If the Esc key has been pressed set running to false to exit the main loop
-                        if event.key == K_ESCAPE:
-                            prev_action = None
-                            running = False
-
-                        elif event.key == K_RSHIFT:
-                            prev_action = None
-                            actions_taken.append((Action.FINISHED, None))
-                            most_recent_action = action_to_ind[Action.FINISHED.value]
-                            done = 1
-                            print("Finished Demonstration:", actions_taken)
-
-                        elif event.key == K_SPACE:
-                            print("Dropped")
-                            drag = False
-                            self.block_dict[sel_block_id].surf.fill(COLORS[sel_block_id])
-                            actions_taken.append((Action.DROP, sel_block_id))
-                            self.evaluate_reward()
-                            most_recent_action = action_to_ind[Action.DROP.value]
-                            print(self.reward)
-
-                        elif event.key in {K_UP, K_DOWN, K_LEFT, K_RIGHT}:
-                            prev_action = event.key
-
-                    # Check for QUIT event; if QUIT, set running to false
-                    elif event.type == QUIT or (hasattr(event, "key") and event.key == K_ESCAPE):
-                        print("writing to file")
-                        prev_action = None
-                        actions_taken.append((Action.FINISHED, None))
-                        most_recent_action = Action.FINISHED
-                        with open("state_action_map.json", 'w') as f:
-                            json.dump(self.state_action_map, f, indent=4)
-                        print("Finished Demonstration:", actions_taken)
-                        running = False
-
-                    elif event.type == pygame.MOUSEBUTTONDOWN:
-                        prev_action = None
-                        pos = pygame.mouse.get_pos()
-                        for block in self.blocks:
-                            if block.rect.collidepoint(pos):
-                                drag = True
-                                sel_block_id = block.id
-                                print("Frame: %d" % frame_num)
-                                actions_taken.append((Action.PICK, block.id))
-                                most_recent_action = action_to_ind[Action.PICK.value + str(block.id)]
-                                self.block_dict[block.id].surf.fill(WHITE)
-                                break
-
-                if prev_action and prev_action != Action.DROP:
-                    action_taken = self.move_block(prev_action, drag, sel_block_id)
-                    if action_taken:
-                        actions_taken.append(action_taken)
-                        most_recent_action = action_to_ind[action_taken[0].value.split("_")[1]]
-
-                # for block in self.blocks:
-                #    self.screen.blit(block.surf, block.rect)
-
-                # pygame.display.flip()
-                filename = self.demo_dir + "/%d.png" % frame_num
-                frame_num += 1
-                if most_recent_action is not None:
-                    self.state_action_map[self.demo_id][frame_num] = [most_recent_action, self.reward, done]
-                for block in self.blocks:
-                    self.screen.blit(block.surf, block.rect)
-                pygame.display.flip()
-                pygame.image.save(self.screen, filename)
-
+    def get_reward_for_state_action_pramodith(self, state, next_state):
+        if state[-2] == next_state[-2]:
+            curr_dist = state[0]
+            next_dist = next_state[0]
+            if next_dist < curr_dist:
+                return 1
+            elif next_dist == curr_dist:
+                return 0
             else:
-                dqn = DQN(12)
+                return -1
+        return 0
 
-                dqn.load_state_dict(torch.load("dqn.pth"))
-                dqn = dqn.cuda()
-                img_string = pygame.image.tostring(self.screen, "RGB", False)
-                # Image.frombytes("RGB", (1000, 950), img_string).show()
-                curr_frame = np.asarray(Image.frombytes("RGB", (1000, 950), img_string))
-                curr_frame = cv2.resize(curr_frame, (100, 95))
-                # print(curr_frame)
 
-                action = torch.argmax(dqn(torch.Tensor(curr_frame).view(1, 3, 100, 95))).item()
-                print(ind_to_action[action])
-                # while ind_to_action[action]!=Action.FINISHED.value:
-                #    time.sleep(1/10)
-                action = ind_to_action[action]
-                print(action)
-                for i in range(0, self.num_blocks):
-                    if action == "PICK" + str(i):
-                        sel_block_id = i
-                        self.block_dict[sel_block_id].surf.fill(WHITE)
-                if action == Action.DROP.value:
-                    self.block_dict[sel_block_id].surf.fill(COLORS[sel_block_id])
-                    sel_block_id = None
-                elif action == Action.MOVE_DOWN.value:
-                    self.block_dict[sel_block_id].centerY += 10
-                elif action == Action.MOVE_UP.value:
-                    self.block_dict[sel_block_id].centerY -= 10
-                elif action == Action.MOVE_LEFT.value:
-                    self.block_dict[sel_block_id].centerX -= 10
-                elif action == Action.MOVE_RIGHT.value:
-                    self.block_dict[sel_block_id].centerX += 10
-                elif action == Action.FINISHED.value:
-                    print("GAME OVER")
-                    return
-                img_string = pygame.image.tostring(self.screen, "RGB", False)
-                curr_frame = np.asarray(Image.frombytes("RGB", (1000, 950), img_string))
-                curr_frame = cv2.resize(curr_frame, (100, 95))
-                action = torch.argmax(dqn(torch.Tensor(curr_frame).view(1, 3, 100, 95))).item()
-                for block in self.blocks:
-                    self.screen.blit(block.surf, block.rect)
-                pygame.display.flip()
-                if ind_to_action[action] == Action.FINISHED.value:
-                    return
+if __name__ == '__main__':
+    BlockWorld(screen_width=500, screen_height=500)

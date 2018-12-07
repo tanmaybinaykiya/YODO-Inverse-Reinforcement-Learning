@@ -31,10 +31,10 @@ class State:
 
         if block_count % 2 == 1:
             for idx, i in enumerate(self.goal_config[0]):
-                goal_position[i] = (median_x, median_y - self.block_size * (block_count // 2 - idx))
+                goal_position[i] = (median_x, median_y + self.block_size * (block_count // 2 - idx))
         else:
             for idx, i in enumerate(self.goal_config[0]):
-                goal_position[i] = (median_x, median_y - self.block_size * (block_count // 2 - idx))
+                goal_position[i] = (median_x, median_y + self.block_size * (block_count // 2 - idx))
         return goal_position
 
     def get_position(self, block_index):

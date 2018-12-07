@@ -1,13 +1,12 @@
 import json
 import pickle
-import time
+import random
 from collections import defaultdict
 
 import numpy as np
 import pygame
-import random
 
-from BlockWorld_t import BlockWorld
+from BlockWorld import BlockWorld
 from constants import Action, COLORS_STR
 
 # FILE_NAME = "Q/q_table_target_state_no_blank"
@@ -79,7 +78,6 @@ class RLTrainer:
             next_action = self.get_random_action(state)
             if self.debug: print("Next action:", next_action)
             return next_action
-
 
     def get_oracle_best_action(self, state, block_idx, order=True):
         curr_position = state.get_position(block_idx)
@@ -159,29 +157,11 @@ class RLTrainer:
 
         return Action.DROP, order
 
-
-    # def get_goal_position(curr_state, goal_config, step_size):
-    #     block_count = curr_state.block_count
-    #     median_x = sum(curr_state.get_position(idx)[0] for idx in range(curr_state.block_count)) // curr_state.block_count
-    #     median_x = 25 + median_x - median_x % step_size
-    #     median_y = sum(curr_state.get_position(idx)[1] for idx in range(curr_state.block_count)) // curr_state.block_count
-    #     median_y = 25 + median_y - median_y % step_size
-    #     goal_position = [None for _ in range(block_count)]
-    #
-    #     if block_count % 2 == 1:
-    #         for idx, i in enumerate(goal_config):
-    #             goal_position[i] = (median_x, median_y + step_size * (block_count // 2 - idx))
-    #     else:
-    #         for idx, i in enumerate(goal_config):
-    #             goal_position[i] = (median_x, median_y + step_size * (block_count // 2 - idx))
-    #     if self.debug: print(curr_state, goal_config, goal_position)
-    #     return goal_position
-
     def get_next_action_supervised(self, state, state_s, q, nu):
         rand_val = np.random.rand()
-        if rand_val < 0.1:
+        if rand_val < 0.3:
             if state_s.selected_index is None:
-                return Action.PICK, random.randint(0, state_s.block_count-1)
+                return Action.PICK, random.randint(0, state_s.block_count - 1)
             else:
                 best_action, self.order = self.get_oracle_best_action(state_s, state_s.selected_index, self.order)
             if self.debug: print("Oracle action:", best_action)
@@ -226,7 +206,7 @@ class RLTrainer:
         all_actions_taken = []
         for _ in range(demo_count):
             block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=False)
-            goal = block_world.goal_config
+            goal = block_world.get_state().goal_config
             all_actions_taken.append({"goal": goal, "actions": block_world.run_environment()})
         RLTrainer.serialize_actions(all_actions_taken)
 
@@ -262,25 +242,23 @@ class RLTrainer:
         cnt = 0
         while cnt < self.iteration_count:
             cnt += 1
-            block_world.pre_render()
+            block_world.pre_render(True)
 
-            curr_state = block_world.get_state_as_tuple_pramodith()
-            curr_state_s = block_world.get_state_as_state()
-            if self.debug: print("State:%s, Q[%s]: %s" %(curr_state_s, curr_state, q_old.get(curr_state, "EMPTY")))
+            curr_state = block_world.get_state().get_state_as_tuple_pramodith()
+            curr_state_s = block_world.get_state()
+            if self.debug: print("State:%s, Q[%s]: %s" % (curr_state_s, curr_state, q_old.get(curr_state, "EMPTY")))
             action, block_id = self.get_next_action(curr_state, q_old, nu)
             if self.debug: print("Action: ", action, block_id)
 
-            next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
+            next_state = block_world.get_state().get_next_state((action, block_id), block_world.get_screen_dims())
             if curr_state_s.goal_reached():
                 print("Converged in %d" % cnt)
                 return True, cnt
             # if self.debug:
 
-            # print("q:", q_old.get(str(curr_state), None))
-            block_world.update_state_from_tuple_pramodith(next_state)
+            block_world.update_state(next_state)
 
-            block_world.render()
-            # time.sleep(0.1)
+            block_world.render()  # time.sleep(0.1)
         return False, self.iteration_count
 
     def q_learning_supervised_new(self, starting_nu=0.5, use_old=True):
@@ -294,10 +272,10 @@ class RLTrainer:
         # q_old = defaultdict(lambda: defaultdict(lambda: 0))
         # goal_config = [np.random.permutation(self.blocks_count).tolist()]
         nu = starting_nu
-        block_world = BlockWorld(screen_width =self.states_x, screen_height = self.states_y)
+        block_world = BlockWorld(screen_width=self.states_x, screen_height=self.states_y)
         # block_world.create_goal(goal_config = [[1,0,2]])
 
-        if self.debug: print("Goal: ", [COLORS_STR[i] for stack in block_world.goal_config for i in stack])
+        if self.debug: print("Goal: ", [COLORS_STR[i] for stack in block_world.get_state().goal_config for i in stack])
 
         ever_seen_goal = False
         cnt = 0
@@ -311,14 +289,78 @@ class RLTrainer:
             curr_state_s = block_world.get_state()
             if curr_state not in q:
                 q[curr_state] = {}
-            # if self.debug: print("Current State: ", curr_state_s)
             action, block_id = self.get_next_action_supervised(curr_state, curr_state_s, q, nu)
-            # if self.debug: print("Action: ", action, block_id)
             next_state = block_world.get_state().get_next_state((action, block_id), block_world.get_screen_dims())
-            print("Current State: %s, \nAction: %s, \nNext_state: %s" %(curr_state_s, action, next_state))
+            if self.debug: print("Current State: %s, \nAction: %s, \nNext_state: %s" % (curr_state_s, action, next_state))
             new_reward = block_world.get_reward_for_state(next_state)
             # new_reward += block_world.get_reward_for_state_action_pramodith(curr_state, next_state)
 
+            if new_reward != 0:
+                if self.debug: print("next_state: ", next_state)
+                if self.debug: print("new_reward: ", new_reward)
+
+            ever_seen_goal = ever_seen_goal or new_reward == 1
+            if (action, block_id) in q[curr_state]:
+                q_sa = q[curr_state][(action, block_id)]
+            else:
+                q_sa = 0
+                q[curr_state][(action, block_id)] = 0
+
+            if next_state in q and len(q[next_state]) > 0:
+                max_q_dash_s_dash_a_dash = max([q[next_state][a_dash] for a_dash in q[next_state]])
+            else:
+                max_q_dash_s_dash_a_dash = 0
+            if self.debug: print("max_q:", max_q_dash_s_dash_a_dash)
+
+            q[curr_state][(action, block_id)] += alpha * (new_reward + gamma * max_q_dash_s_dash_a_dash - q_sa)
+            if self.debug: print("q:", q[curr_state][(action, block_id)])
+
+            block_world.update_state(next_state)
+
+            if cnt > 3000 and cnt % 500 == 0 and nu > 0.05:
+                print(cnt)
+                nu -= 0.1
+            # nu *= 0.9995
+
+            block_world.render()
+
+            # converged = ever_seen_goal and q == q_old  # q_old = q  # time.sleep(1)
+        pygame.display.quit()
+        # self.test_q_learning_real(q)
+        RLTrainer.save_obj(q, FILE_NAME)
+        # print(q)
+        return q
+
+    def q_learning_real(self, starting_nu=0.9, use_old=True):
+        alpha = 0.5
+        gamma = 0.5
+        converged = False
+        if use_old:
+            q_old = RLTrainer.load_obj(FILE_NAME)
+        else:
+            q_old = {}
+        # q_old = defaultdict(lambda: defaultdict(lambda: 0))
+        # goal_config = [np.random.permutation(self.blocks_count).tolist()]
+        nu = starting_nu
+        block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=False)
+        if self.debug: print("Goal: ", [COLORS_STR[i] for stack in block_world.get_state().goal_config for i in stack])
+
+        ever_seen_goal = False
+        cnt = 0
+        q = q_old.copy()
+        while cnt < self.iteration_count:
+            cnt += 1
+            # while not converged:
+            block_world.pre_render()
+            curr_state = block_world.get_state().get_state_as_tuple_pramodith()
+            if curr_state not in q:
+                q[curr_state] = {}
+            if self.debug:  print("Current State: ", curr_state)
+            action, block_id = self.get_next_action(curr_state, q, nu)
+            if self.debug: print("Action: ", action, block_id)
+            next_state = block_world.get_state().get_next_state((action, block_id), block_world.get_screen_dims())
+            new_reward = block_world.get_reward_for_state(next_state)
+            new_reward += block_world.get_reward_for_state_action_pramodith(curr_state, next_state)
             if new_reward != 0:
                 if self.debug: print("next_state: ", next_state)
                 if self.debug: print("new_reward: ", new_reward)
@@ -342,84 +384,13 @@ class RLTrainer:
             block_world.update_state(next_state)
 
             if cnt > 3000 and cnt % 500 == 0 and nu > 0.05:
-                print(cnt)
-                nu -= 0.1
-            # nu *= 0.9995
-
-            block_world.render()
-
-
-            # converged = ever_seen_goal and q == q_old
-            # q_old = q
-            # time.sleep(1)
-        pygame.display.quit()
-        # self.test_q_learning_real(q)
-        RLTrainer.save_obj(q, FILE_NAME)
-        # print(q)
-        return q
-
-    def q_learning_real(self, starting_nu=0.9, use_old=True):
-        alpha = 0.5
-        gamma = 0.5
-        converged = False
-        if use_old:
-            q_old = RLTrainer.load_obj(FILE_NAME)
-        else:
-            q_old = {}
-        # q_old = defaultdict(lambda: defaultdict(lambda: 0))
-        # goal_config = [np.random.permutation(self.blocks_count).tolist()]
-        nu = starting_nu
-        block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, 1, record=False)
-        if self.debug: print("Goal: ", [COLORS_STR[i] for stack in block_world.goal_config for i in stack])
-
-        ever_seen_goal = False
-        cnt = 0
-        q = q_old.copy()
-        while cnt < self.iteration_count:
-            cnt += 1
-            # while not converged:
-            block_world.pre_render()
-            curr_state = block_world.get_state_as_tuple_pramodith()
-            if curr_state not in q:
-                q[curr_state] = {}
-            if self.debug:  print("Current State: ", curr_state)
-            action, block_id = self.get_next_action(curr_state, q, nu)
-            if self.debug: print("Action: ", action, block_id)
-            next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
-            new_reward = block_world.get_reward_for_state(next_state)
-            new_reward += block_world.get_reward_for_state_action_pramodith(curr_state, next_state)
-            if new_reward != 0:
-                if self.debug: print("next_state: ", next_state)
-                if self.debug: print("new_reward: ", new_reward)
-
-            ever_seen_goal = ever_seen_goal or new_reward == 1
-            if (action, block_id) in q[curr_state]:
-                q_sa = q[curr_state][(action, block_id)]
-            else:
-                q_sa = 0
-                q[curr_state][(action, block_id)] = 0
-
-            if next_state in q and len(q[next_state]) > 0:
-                max_q_dash_s_dash_a_dash = max([q[next_state][a_dash] for a_dash in q[next_state]])
-            else:
-                max_q_dash_s_dash_a_dash = 0
-            if self.debug: print("max_q:", max_q_dash_s_dash_a_dash)
-
-            q[curr_state][(action, block_id)] += alpha * (new_reward + gamma * (max_q_dash_s_dash_a_dash) - q_sa)
-            if self.debug: print("q:", q[curr_state][(action, block_id)])
-
-            block_world.update_state_from_tuple_pramodith(next_state)
-
-            if cnt > 3000 and cnt % 500 == 0 and nu > 0.05:
                 if self.debug: print(cnt)
                 nu -= 0.1
             # nu *= 0.9995
 
             block_world.render()
 
-            converged = ever_seen_goal and q == q_old
-            # q_old = q
-            # time.sleep(0.1)
+            converged = ever_seen_goal and q == q_old  # q_old = q  # time.sleep(0.1)
         pygame.display.quit()
         # self.test_q_learning_real(q)
         RLTrainer.save_obj(q, FILE_NAME)
@@ -559,7 +530,6 @@ def test():
 
 
 if __name__ == '__main__':
-
     # Supervised: Success:  [275, 499, 9, 113, 434, 71, 240, 486, 54, 18, 61, 332, 263, 5, 66, 39, 16, 76, 224, 162, 566, 206, 20, 241] Failed: 26
     # Unsupervised Success:  [6, 957, 39, 72, 344, 143, 140, 349, 24, 140, 143, 862, 140, 152, 427, 220, 55, 588, 11, 559, 127, 333, 36] Failed:  27
 
