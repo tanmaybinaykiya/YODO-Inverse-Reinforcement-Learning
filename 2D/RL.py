@@ -17,7 +17,7 @@ class RLTrainer:
         self.states_y = states_y
         self.blocks_count = blocks_count
         self.stack_count= stack_count
-        self.non_pick_actions = [Action.MOVE_UP, Action.MOVE_DOWN, Action.MOVE_LEFT, Action.MOVE_RIGHT, Action.DROP]
+        self.non_pick_actions = [Action.MOVE_UP, Action.MOVE_DOWN, Action.MOVE_LEFT, Action.MOVE_RIGHT,Action.DROP]
         self.actions = self.non_pick_actions.copy()
         self.actions.append(Action.PICK)
         self.action_to_idx = {action: idx for idx, action in enumerate(self.actions)}
@@ -45,10 +45,11 @@ class RLTrainer:
 
 
     def get_best_action(self,q, state):
-        if state[-2] is None:
+        if state[-2] == None:
             max_q=[(a,q[state].get(a,0)) for a in self.pick_action_block_pairs]
         else:
-            max_q=[(a,q[state].get(a,0)) for a in self.non_pick_actions_block_pairs]
+
+            max_q=[((a,state[-2]),q[state].get((a,state[-2]),0)) for a in self.non_pick_actions ]
         max_values=[max_q[i][1] for i in range(len(max_q))]
         max_actions=[max_q[i][0] for i in range(len(max_q))]
         if max_values.count(max(max_values))>1:
@@ -60,7 +61,7 @@ class RLTrainer:
         #return max([(a, q[state][a]) for a in q[state]], key=lambda x: x[1])[0]
 
     def get_random_action(self, state):
-        if state[-2] is None:
+        if state[-2] == None:
             return Action.PICK, np.random.randint(0, self.blocks_count)
         else:
             poss_actions = [(a, state[-2]) for a in self.non_pick_actions]
@@ -141,31 +142,36 @@ class RLTrainer:
             #q = q_old.copy()
             block_world.pre_render()
 
-            curr_state = block_world.get_state_as_tuple_pramodith()
+            curr_state = block_world.get_state_as_tuple_pramodith2()
             if self.debug and curr_state in q: print("Current State: %s" +str(curr_state), q[curr_state])
             action, block_id = self.get_next_action(curr_state, q_old, nu)
             if self.debug: print("Action: ", action, block_id)
 
             next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
-            reward=block_world.get_reward_for_state(curr_state)
-            if reward>20:
+            new_reward = block_world.get_reward_for_state(next_state, curr_state)
+            new_reward += block_world.get_reward_for_state_action_pramodith(curr_state, next_state)
+            print("Reward")
+            print(new_reward)
+
+            if new_reward>=50:
                 print("Converged in %d", cnt)
-                #return
+                return cnt
             #if self.debug:
 
             print("q:", q_old.get(str(curr_state),None))
             block_world.update_state_from_tuple_pramodith(next_state)
 
             block_world.render()
-            time.sleep(0.1)
+            #time.sleep(0.1)
+        return cnt
 
 
-    def q_learning_real(self, starting_nu=0.9,use_old=True):
-        alpha = 0.5
-        gamma = 0.5
+    def q_learning_real(self, starting_nu=0.7,use_old=True):
+        alpha = 1
+        gamma = 0.1
         converged = False
         if use_old:
-            q_old=RLTrainer.load_obj("Q\q_table_target_state_no_blank")
+            q_old=RLTrainer.load_obj("Q\q_table_target_state_no_goal")
         else:
             q_old={}
         #q_old = defaultdict(lambda: defaultdict(lambda: 0))
@@ -181,18 +187,21 @@ class RLTrainer:
             cnt+=1
         #while not converged:
             block_world.pre_render()
-            curr_state = block_world.get_state_as_tuple_pramodith()
+            curr_state = block_world.get_state_as_tuple_pramodith2()
             if curr_state not in q:
                 q[curr_state]={}
             print("Current State: ", curr_state)
             action, block_id = self.get_next_action(curr_state, q, nu)
+            #if action==Action.DROP:
+            #    s=0
             if self.debug: print("Action: ", action, block_id)
             next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
-            new_reward = block_world.get_reward_for_state(next_state)
+            new_reward = block_world.get_reward_for_state(next_state,curr_state)
             new_reward+= block_world.get_reward_for_state_action_pramodith(curr_state,next_state)
-            if new_reward!=0:
+            if new_reward>1 or new_reward<-1:
                 if self.debug: print("next_state: ", next_state)
                 if self.debug: print("new_reward: ", new_reward)
+
 
             ever_seen_goal = ever_seen_goal or new_reward == 1
             if (action,block_id) in q[curr_state]:
@@ -206,32 +215,36 @@ class RLTrainer:
             else:
                 max_q_dash_s_dash_a_dash = 0
             if self.debug: print("max_q:", max_q_dash_s_dash_a_dash)
+            if new_reward > 70:
+                q[curr_state][(action, block_id)] = ((1 - alpha) * q_sa) + (alpha * (new_reward))
+                break
+            else:
+                q[curr_state][(action, block_id)] += alpha * (new_reward + gamma * (max_q_dash_s_dash_a_dash) - q_sa)
 
-            q[curr_state][(action, block_id)] += alpha * (new_reward + gamma * (max_q_dash_s_dash_a_dash) - q_sa)
             if self.debug: print("q:", q[curr_state][(action, block_id)])
 
             block_world.update_state_from_tuple_pramodith(next_state)
 
-            if cnt>3000 and cnt%300==0 and nu>0.05:
-                print(cnt)
-                nu-=0.1
+            if cnt>4000 and cnt%250==0 and nu>0.05:
+                alpha-=0.1
+            # print(cnt)
+            #    nu-=0.1
             #nu *= 0.9995
 
             block_world.render()
 
             converged = ever_seen_goal and q == q_old
             #q_old = q
-            time.sleep(0.1)
+            #time.sleep(0.1)
         pygame.display.quit()
         #self.test_q_learning_real(q)
-        RLTrainer.save_obj(q,"Q\q_table_target_state_no_blank")
+        RLTrainer.save_obj(q,"Q\q_table_target_state_no_goal")
         #with open ("Q\q_table1.json",'w') as f:
         #    json.dump(q,f,indent=5)
-        print(q)
 
     def q_learning(self, q=None, starting_nu=1.0, decay_nu=True, decay_rate=0.9995):
-        gamma = 0.5
-        alpha = 0.5
+        gamma = 0.1
+        alpha = 1
         episode_count = 100
         if not q:
             q = defaultdict(lambda: defaultdict(lambda: 0))
@@ -262,7 +275,6 @@ class RLTrainer:
                     max_q = 0
 
                 if self.debug: print("max_q:", max_q)
-
                 q[curr_state][(action, block_id)] = ((1 - alpha) * q_i) + (alpha * (new_reward + gamma * max_q))
                 if self.debug: print("q:", q[curr_state][(action, block_id)])
 
@@ -362,10 +374,18 @@ def test():
 
 
 if __name__ == '__main__':
-    q=RLTrainer.load_obj("Q\q_table_target_state_no_blank")
-    use_old=True
-    print(q)
-    RLTrainer(states_x=350, states_y=350, blocks_count=4,stack_count=2, iteration_count=1000, debug=True).test_q_learning_real(q)
-    #for i in range(10):
-    #    RLTrainer(states_x=350, states_y=350, blocks_count=4,stack_count=2, iteration_count=6000, debug=True).q_learning_real(use_old=use_old)
-    #    use_old=True
+    use_old=False
+    nu = 0.1
+
+    for i in range(2):
+         RLTrainer(states_x=350, states_y=350, blocks_count=2,stack_count=1, iteration_count=1000, debug=True).q_learning_real(use_old=use_old,starting_nu=nu)
+         use_old=True
+    q = RLTrainer.load_obj("Q\q_table_target_state_3_goal")
+    iterations=[]
+
+    for i in range(100):
+        iter = RLTrainer(states_x=350, states_y=350, blocks_count=2, stack_count=1, iteration_count=1000,debug=True).test_q_learning_real(q)
+        iterations.append(iter)
+    print(iterations)
+    print(iterations.count(1000))
+    print(sum(iterations) / len(iterations))
