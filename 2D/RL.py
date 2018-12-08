@@ -191,6 +191,9 @@ class RLTrainer:
         nu = starting_nu
         block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, self.stack_count, record=False)
         if self.debug: print("Goal: ", [[COLORS_STR[i] for i in stack if i>=0] for stack in block_world.goal_config])
+        state_s = State(block_positions=[[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in range(self.blocks_count)],
+            selected_index=block_world.selected_block_id, goal_config=block_world.goal_config, screen_dims=(block_world.screen_width, block_world.screen_height))
+        block_world.goal_loc = state_s.goal_positions
 
         remaining_prob=1-nu
         do_next=0
@@ -225,9 +228,9 @@ class RLTrainer:
             state_distance_queue.append(curr_state[0])
             if len(state_distance_queue)==6:
                 if (len(set(list(state_distance_queue)[0::2]))==1 and len(set(list(state_distance_queue)[1::2]))==1) or do_next>0:
-                    state_s = State([[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in
-                         range(self.blocks_count)], block_world.selected_block_id, block_world.goal_config)
-                    block_world.goal_loc = state_s.goal_positions
+                    state_s = State(block_positions=[[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in range(self.blocks_count)],
+                        selected_index=block_world.selected_block_id, goal_config=block_world.goal_config, screen_dims=(block_world.screen_width, block_world.screen_height))
+                    state_s.goal_positions = block_world.goal_loc
                     action, block_id = self.get_next_action_supervised_t(state_t=None, state_s=state_s, q=None, nu=0)
                     print("Oracle action:", action)
 
