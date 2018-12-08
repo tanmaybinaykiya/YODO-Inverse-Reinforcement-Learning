@@ -105,12 +105,13 @@ class Demonstrations:
     def q_learning_real(self, starting_nu=0.0,use_old=True,record=False,demo_id=1,goal_config=None):
         alpha = 1
         gamma = 0.1
+        action=None
         record_actions={}
         if use_old:
             if demo_id==1:
-                q_old=Demonstrations.load_obj("q_table\q_3_blocks_all_goals")
+                q_old=Demonstrations.load_obj("q_table/q_3_blocks_all_goals")
             else:
-                q_old=Demonstrations.load_obj("q_table\q_demo_"+str(demo_id-1))
+                q_old=Demonstrations.load_obj("q_table/q_demo_"+str(demo_id-1))
         else:
             q_old={}
         nu = starting_nu
@@ -132,36 +133,54 @@ class Demonstrations:
             print("Current State: ", curr_state)
 
             user_choice=False
-            for i in range(10):
-
-                time.sleep(0.1)
+            paused=True
+            picked=False
+            while not user_choice and paused:
+                time.sleep(1)
                 for event in pygame.event.get():
-                    if event.type == KEYUP:
-                        user_choice=True
 
                     if event.type == KEYDOWN:
-
-                        if event.key ==K_SPACE:
-                            action=Action.DROP
-                        elif event.key == K_UP:
-                            action = Action.MOVE_UP
-                        elif event.key == K_DOWN:
-                            action = Action.MOVE_DOWN
-                        elif event.key == K_LEFT:
-                            action = Action.MOVE_LEFT
-                        elif event.key == K_RIGHT:
-                            action = Action.MOVE_RIGHT
-                    elif event.type == pygame.MOUSEBUTTONDOWN:
-                        pos = pygame.mouse.get_pos()
-                        for block in block_world.block_dict.values():
-                            if block.rect.collidepoint(pos):
+                        if action!="PAUSE":
+                            if event.key ==K_SPACE:
+                                action="PAUSE"
+                                paused=True
+                        if picked and paused:
+                            print('Waiting for user correction.')
+                            if event.key == K_UP:
                                 user_choice=True
-                                if block_id:
-                                    block_world.block_dict[block_id].surf.fill(COLORS[block_id])
-                                block_id = block.id
-                                action=Action.PICK
-                                #block_world.block_dict[block_id].surf.fill(CLICKED_COLOR[block_id])
-                                break
+                                paused=False
+                                picked=False
+                                action = Action.MOVE_UP
+                                user_choice=True
+                            elif event.key == K_DOWN:
+                                user_choice=True
+                                paused=False
+                                picked=False
+                                action = Action.MOVE_DOWN
+                            elif event.key == K_LEFT:
+                                user_choice=True
+                                picked=False
+                                paused=False
+                                action = Action.MOVE_LEFT
+                            elif event.key == K_RIGHT:
+                                user_choice=True
+                                paused=False
+                                picked=False
+                                action = Action.MOVE_RIGHT
+                    elif event.type == pygame.MOUSEBUTTONDOWN:
+                        if action=="PAUSE":
+                            pos = pygame.mouse.get_pos()
+                            for block in block_world.block_dict.values():
+                                if block.rect.collidepoint(pos):
+                                    if block_id:
+                                        block_world.block_dict[block_id].surf.fill(COLORS[block_id])
+                                    block_id = block.id
+                                    picked=True
+                                    #block_world.block_dict[block_id].surf.fill(CLICKED_COLOR[block_id])
+                                    break
+                if action!="PAUSE" and picked==False:
+                    print("paused not true")
+                    paused=False
 
             if not user_choice:
                 action, block_id = self.get_next_action(curr_state, q, nu)
@@ -215,43 +234,47 @@ class Demonstrations:
 
             time.sleep(0.1)
         pygame.display.quit()
-        Demonstrations.save_obj(q,"q_table\q_demo_"+str(demo_id))
+        Demonstrations.save_obj(q,"q_table/q_demo_"+str(demo_id))
         Demonstrations.save_obj(record_actions,"state_action_recording/demo_"+str(demo_id))
 
 if __name__ == '__main__':
     use_old=True
     nu = 0.1
     demo_id=1
-    goal_config=[[[0,1],[1,0]],[[0,1,2],[2,1,0],[0,1,2]]]
+    demo_goal_config=[[0,1,2],[2,1,0],[1,2,0],[1,0,2]]
+    np.random.shuffle(demo_goal_config)
     print("Welcome to the blockworld demonstration.")
+    print("The simulation shows a partially working algorithm that tries to stack blocks in the given goal configuration. \n The agent will attempt to move the blocks, you're task"
+          "is to correct the agent whenever you think it's making a wrong move. ")
     print("Controls are: \n\n UP_ARROW:MOVE_UP \n\n DOWN_ARROW: MOVE_DOWN \n\n RIGHT_ARROW: MOVE_RIGHT \n\n LEFT_ARROW: MOVE_LEFT \n\n MOUSE_CLICK: PICKS A BLOCK \n\n SPACE_BAR: DROPS THE SELECTED BLOCK")
     print("\nThe currently active block has a ligher shade of it's original color and on dropping the block, it becomes darker.")
     print("\nThe goal configuration is given in the tiny screen at the top right corner")
 
-    goal_choice=input("Press 1 if you want to demonstrate the same goal, 2 if you want to demonstrate a random goal.")
-    while(goal_choice==1 or goal_choice==2):
-        print("Wrong choice!")
-        goal_choice = input("Press 1 if you want to demonstrate the same goal, 2 if you want to demonstrate a random goal.")
-    num_blocks=input("Enter the number of blocks you want in the world options are 2 or 3 \n")
-    while (num_blocks == 2 or num_blocks == 3):
-        print("Wrong choice!")
-        num_blocks = input("Enter the number of blocks you want in the world options are 2 or 3 \n")
-    goal_choice=int(goal_choice)
-    num_blocks = int(num_blocks)
-    if goal_choice==1:
-        chosen_goal=np.random.randint(0,num_blocks-1)
-        goal_config=goal_config[num_blocks-2][chosen_goal]
-    else:
-        goal_config=None
-    input=input("Press SPACE when you are ready for the task")
+    #goal_choice=input("Press 1 if you want to demonstrate the same goal, 2 if you want to demonstrate a random goal.")
+    #while(goal_choice!=1 and goal_choice!=2):
+    #    print("Wrong choice!")
+    #    goal_choice = input("Press 1 if you want to demonstrate the same goal, 2 if you want to demonstrate a random goal.")
+    #num_blocks=input("Enter the number of blocks you want in the world options are 2 or 3 \n")
 
+    #while (num_blocks != 3):
+    #    print("Wrong choice!")
+    #    num_blocks = input("Enter the number of blocks you want in the world options are 2 or 3 \n")
 
-    if input==" ":
-        for i in range(2):
-             Demonstrations(states_x=350, states_y=350, blocks_count=num_blocks,stack_count=1, iteration_count=5000, debug=True)\
+    #goal_choice=int(goal_choice)
+    #num_blocks = 3
+
+    input=input("Enter yes when you are ready for the task")
+    while(input!="Yes" and input!="yes"):
+        input = input("Enter yes when you are ready for the task")
+
+    if input.lower()=='yes':
+        for i in range(8):
+            chosen_goal = i//2
+            goal_config = demo_goal_config[chosen_goal]
+            Demonstrations(states_x=350, states_y=350, blocks_count=3,stack_count=1, iteration_count=5000, debug=True)\
                  .q_learning_real(use_old=use_old,starting_nu=nu,demo_id=demo_id,record=True,goal_config=goal_config)
-             use_old=True
-             demo_id+=1
+            use_old=True
+            demo_id+=1
 
 
     #q = RLTrainer.load_obj("Q\q_oracle")
