@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict
-from collections import deque
+
 import numpy as np
 import pygame
 from BlockWorld_t import BlockWorld
@@ -176,7 +176,7 @@ class RLTrainer:
         return cnt
 
 
-    def q_learning_real(self, starting_nu=0.1,use_old=True):
+    def q_learning_real(self, starting_nu=0.0,use_old=True):
         alpha = 1
         gamma = 0.1
         actions_queue=deque(maxlen=5)
@@ -186,6 +186,8 @@ class RLTrainer:
             q_old=RLTrainer.load_obj("Q\q_oracle")
         else:
             q_old={}
+        #q_old = defaultdict(lambda: defaultdict(lambda: 0))
+        #goal_config = [np.random.permutation(self.blocks_count).tolist()]
         nu = starting_nu
         block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, self.stack_count, record=False)
         if self.debug: print("Goal: ", [[COLORS_STR[i] for i in stack if i>=0] for stack in block_world.goal_config])
@@ -196,6 +198,7 @@ class RLTrainer:
         q = q_old.copy()
         while cnt<self.iteration_count:
             cnt+=1
+        #while not converged:
             block_world.pre_render(True)
 
             curr_state = block_world.get_state_as_tuple_pramodith2()
@@ -228,24 +231,13 @@ class RLTrainer:
                     action, block_id = self.get_next_action_supervised_t(state_t=None, state_s=state_s, q=None, nu=0)
                     print("Oracle action:", action)
 
-                    if do_next<2:
-                        do_next+=1
-                    else:
-                        do_next=0
-            '''
-            if 1 not in actions_queue and len(actions_queue)==5:
-                state_s = State([[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in range(self.blocks_count)],block_world.selected_block_id, block_world.goal_config)
-                block_world.goal_loc = state_s.goal_positions
-                action, block_id = self.get_next_action_supervised_t(state_t=None, state_s=state_s, q=None, nu=0)
-                if action==Action.PICK or action==Action.DROP:
-                    actions_queue.append(0)
-                else:
-                    actions_queue.append(1)
-            '''
+            #action, block_id = self.get_next_action(curr_state, q, nu)
+            #if action==Action.DROP:
+            #    s=0
             if self.debug: print("Action: ", action, block_id)
             next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
             new_reward = block_world.get_reward_for_state(next_state,curr_state)
-            new_reward+= block_world.get_reward_for_state_action_pramodith(curr_state, next_state)
+            new_reward+= block_world.get_reward_for_state_action_pramodith(curr_state,next_state)
             if new_reward>1 or new_reward<-1:
                 if self.debug: print("next_state: ", next_state)
                 if self.debug: print("new_reward: ", new_reward)
@@ -259,15 +251,11 @@ class RLTrainer:
 
             if next_state in q and len(q[next_state]) > 0:
                 max_q_dash_s_dash_a_dash = max([q[next_state][a_dash] for a_dash in q[next_state]])
-
             else:
                 max_q_dash_s_dash_a_dash = 0
             if self.debug: print("max_q:", max_q_dash_s_dash_a_dash)
             if new_reward > 70:
                 q[curr_state][(action, block_id)] = ((1 - alpha) * q_sa) + (alpha * (new_reward))
-                break
-
-
             else:
                 q[curr_state][(action, block_id)] += alpha * (new_reward + gamma * (max_q_dash_s_dash_a_dash) - q_sa)
 
@@ -285,7 +273,7 @@ class RLTrainer:
 
             # converged = ever_seen_goal and q == q_old
             #q_old = q
-            #time.sleep(0.1)
+            time.sleep(0.1)
         pygame.display.quit()
         #self.test_q_learning_real(q)
         RLTrainer.save_obj(q,"Q\q_oracle")
@@ -450,17 +438,19 @@ def test():
 if __name__ == '__main__':
     use_old=False
     nu = 0.1
-    '''
-    for i in range(20):
-         RLTrainer(states_x=350, states_y=350, blocks_count=3,stack_count=1, iteration_count=5000, debug=False).q_learning_real(use_old=use_old,starting_nu=nu)
+
+    for i in range(1):
+         RLTrainer(states_x=350, states_y=350, blocks_count=3,stack_count=1, iteration_count=5000, debug=True).q_learning_real(use_old=use_old,starting_nu=nu)
          use_old=True
+
+
+    #q = RLTrainer.load_obj("Q\q_oracle")
     '''
-    
-    q = RLTrainer.load_obj("Q\q_oracle")
     iterations = []
     for i in range(100):
-        iter = RLTrainer(states_x=350, states_y=350, blocks_count=3, stack_count=1, iteration_count=1000,debug=True).test_q_learning_real(q,starting_nu=0.1)
+        iter = RLTrainer(states_x=350, states_y=350, blocks_count=3, stack_count=1, iteration_count=1000,debug=True).test_q_learning_real(q,starting_nu=0.05)
         iterations.append(iter)
     print(iterations)
     print(iterations.count(1000))
     print(sum(iterations) / len(iterations))
+    '''

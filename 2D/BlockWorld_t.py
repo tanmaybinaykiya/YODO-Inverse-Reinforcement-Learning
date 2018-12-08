@@ -52,6 +52,7 @@ class BlockWorld:
 
         self.selected_block_id = None
         self.actions_taken = []
+        self.goal_loc = None
 
     @staticmethod
     def distance(pts1, pts2):
