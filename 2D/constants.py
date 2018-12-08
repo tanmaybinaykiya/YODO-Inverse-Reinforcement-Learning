@@ -56,5 +56,6 @@ move_action_to_deviation = {
     Action.MOVE_LEFT: (-step_size, 0),
     Action.MOVE_RIGHT: (step_size, 0),
     Action.DROP: (0, 0),
+    Action.FINISHED: (0, 0),
     Action.PICK: (0, 0)
 }

@@ -65,8 +65,8 @@ class BlockWorld:
         block_order = [i for i in range(self.num_blocks)]
 
         seed = np.random.randint(0, self.num_stacks)
-        block_order=[0,2,3,1]
-        #random.shuffle(block_order)
+        #block_order=[0,1]
+        random.shuffle(block_order)
         last_used_block = 0
         blocks_per_stack = self.num_blocks // self.num_stacks
         block_size = self.goal_screen_dim[0] // 10
@@ -98,7 +98,7 @@ class BlockWorld:
         return goal_config
 
     def euclidean_dist(self,point1,point2):
-        return np.sqrt(np.square(point1.rect.centerx-point2.rect.centerx)+np.square(point1.rect.centery-point2.rect.centery))
+        return np.square(point1.rect.centerx-point2.rect.midbottom[0])+np.square(point1.rect.centery-point2.rect.midbottom[1])
 
     def get_reward_for_state_action_pramodith(self, state,next_state):
         if state[-2]==next_state[-2]:
@@ -109,14 +109,15 @@ class BlockWorld:
             elif next_dist==curr_dist:
                 return 0
             else:
-                return -1
+                return -5
         return 0
 
-    def get_reward_for_state(self, block_states):
+    def get_reward_for_state(self, block_states,curr_state):
         reward=0
-        goal_reward=self.get_sparse_reward_for_state_pramodith(block_states)
-        if goal_reward>0:
+        goal_reward=self.get_sparse_reward_for_state_pramodith(block_states,curr_state)
+        if goal_reward!=0:
             return goal_reward
+
         else:
             for block_id in range(len(self.block_dict)):
                 for block_id2 in range(len(self.block_dict)):
@@ -124,42 +125,37 @@ class BlockWorld:
                         if self.euclidean_dist(self.block_dict[block_id],self.block_dict[block_id2])<55:
                             reward+=5
             return reward
-        '''if block_states[0][0]<30 and block_states[0][1]<30:
+        '''
+        if block_states[0][0]<30 and block_states[0][1]<30:
             return 1
         else:
             return 0
         '''
-        #
 
-    def get_sparse_reward_for_state_pramodith(self, block_states):
-        goal_config = block_states[-1]
+
+    def get_sparse_reward_for_state_pramodith(self, block_states,prev_state):
+        sel_block=block_states[-2]
         score = 0
-        this_score=0
-        block_size = self.block_size
-        '''
-        for stack in goal_config:
-            for i in range(1, len(stack)):
-                curr_block, prev_block = self.block_dict[stack[i]], self.block_dict[stack[i - 1]]
-                if curr_block.rect.centerx==prev_block.rect.centerx:
-                    this_score = prev_block.rect.centery-curr_block.rect.centery
-                    if this_score==50:
+        num_stacks_aligned=1
+        flag2=0
+        reward=0
+        if sel_block==None and self.euclidean_dist(self.block_dict[prev_state[-1][0]],self.block_dict[prev_state[-1][1]])>5000:
+            reward -=0.1
+        if any([block_states[i]!=prev_state[i] for i in range(1,len(block_states))]) or type (block_states[0])!=type(prev_state[0]) or block_states[0]!=prev_state[0]:
+            for stack_num in self.target_blocks:
+                for key in self.target_blocks[stack_num]:
+                    if self.block_dict[key].rect.centerx==self.block_dict[self.target_blocks[stack_num][key]].rect.centerx and \
+                            self.block_dict[key].rect.centery-self.block_dict[self.target_blocks[stack_num][key]].rect.centery==self.block_size:
                         score+=1
-        '''
-        num_stacks_aligned=0
-        for stack_num in self.target_blocks:
-            flag=0
-            for key in self.target_blocks[stack_num]:
-                if self.block_dict[key].rect.centerx==self.block_dict[self.target_blocks[stack_num][key]].rect.centerx and \
-                    self.block_dict[key].rect.centery-self.block_dict[self.target_blocks[stack_num][key]].rect.centery==self.block_size:
-                    score+=1
-                    flag=1
-            if flag:
-                num_stacks_aligned+=1
+                    if sel_block==key or sel_block==self.target_blocks[stack_num][key]:
+                        flag2+=1
+                if score>0:
+                    return 10*(5*score)*num_stacks_aligned+reward
 
-        if score>0:
-            return 50*(4**score)*num_stacks_aligned
         else:
-            return 0
+            return -0.1 + reward
+
+        return reward
 
     def get_sparse_reward_for_state(self, block_states):
         goal_config = block_states[-1]
@@ -221,19 +217,18 @@ class BlockWorld:
 
     def get_state_as_tuple_pramodith(self):
         # curr_state is a n-tuple( (x1, y1), (x2, y2), (x3, y3), (x4, y4), selectedBlockId, (goal_config))
-        some_list = [-1 for _ in range(3)]
+        some_list = [-1 for _ in range(4)]
         ind=0
         # distances.append(np.square(self.block_dict[block_id].rect.centerx-self.block_dict[block_id2].rect.centerx)+\
         #                       np.square(self.block_dict[block_id].rect.centery-self.block_dict[block_id2].rect.centery))
 
         #for block_id in sorted(self.block_dict.keys()):
-        directions = ["-", "-"]
+        directions = ["-", "-","-"]
         if self.selected_block_id!=None:
             for stack_num in self.target_blocks:
                 if self.selected_block_id in self.target_blocks[stack_num]:
                     target_id=self.target_blocks[stack_num][self.selected_block_id]
-                    some_list[0] = np.square(self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx) + \
-                                    np.square(self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery)
+                    some_list[0] = self.euclidean_dist(self.block_dict[self.selected_block_id],self.block_dict[target_id])
                     if self.block_dict[self.selected_block_id].rect.centerx-self.block_dict[target_id].rect.centerx>0:
                         directions[0]='l'
                     elif self.block_dict[self.selected_block_id].rect.centerx-self.block_dict[target_id].rect.centerx<0:
@@ -242,22 +237,31 @@ class BlockWorld:
                         directions[1]='u'
                     elif self.block_dict[self.selected_block_id].rect.centery-self.block_dict[target_id].rect.centery<0:
                         directions[1]='d'
-            else:
-                for stack_num in self.target_blocks:
-                    for key,value in self.target_blocks[stack_num].items():
-                        if value==self.selected_block_id:
-                            target_id=key
-                            some_list[0] = np.square(self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx) + \
-                                           np.square(self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery)
-                            if self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[
-                                target_id].rect.centerx > 0:
-                                directions[0] = 'l'
-                            elif self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx < 0:
-                                directions[0] = 'r'
-                            if self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery > 0:
-                                directions[1] = 'u'
-                            elif self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery < 0:
-                                directions[1] = 'd'
+                    other_block= list(set([i for i in range(self.num_blocks)]).difference(set([self.selected_block_id,target_id])))[0]
+                    if self.block_dict[other_block].rect.centerx==self.block_dict[target_id].rect.centerx and self.block_dict[other_block].rect.centerx-50==self.block_dict[other_block].rect.centerx:
+                        directions[2]="b"
+
+
+                else:
+                    for stack_num in self.target_blocks:
+                        for key,value in self.target_blocks[stack_num].items():
+                            if value==self.selected_block_id:
+                                target_id=key
+                                some_list[0] = self.euclidean_dist(self.block_dict[self.selected_block_id],self.block_dict[target_id]) - self.block_size/2
+                                if self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[
+                                    target_id].rect.centerx > 0:
+                                    directions[0] = 'l'
+                                elif self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx < 0:
+                                    directions[0] = 'r'
+                                if self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery > 0:
+                                    directions[1] = 'u'
+                                elif self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery < 0:
+                                    directions[1] = 'd'
+                                other_block = list(set([i for i in range(self.num_blocks)]).difference(set([self.selected_block_id, target_id])))[0]
+                                if self.block_dict[other_block].rect.centerx == self.block_dict[target_id].rect.centerx and self.block_dict[other_block].rect.centerx +50 == self.block_dict[other_block].rect.centerx:
+                                    directions[2] = "b"
+                    for key in self.target_blocks[stack_num]:
+                        some_list[1]+=self.euclidean_dist(self.block_dict[key],self.block_dict[self.target_blocks[stack_num][key]])
         else:
             distances=[]
             for stack_num in self.target_blocks:
@@ -266,10 +270,88 @@ class BlockWorld:
 
             some_list[0]=tuple(distances)
 
-        some_list[1]=tuple(directions)
+        some_list[2]=tuple(directions)
         some_list[-1] = self.selected_block_id
         some_list.append(tuple([tuple(x) for x in self.goal_config]))
+        return tuple(some_list)
 
+    def get_state_as_tuple_pramodith2(self):
+        # curr_state is a n-tuple( (x1, y1), (x2, y2), (x3, y3), (x4, y4), selectedBlockId, (goal_config))
+        some_list = [0 for _ in range(4)]
+        ind = 0
+        # distances.append(np.square(self.block_dict[block_id].rect.centerx-self.block_dict[block_id2].rect.centerx)+\
+        #                       np.square(self.block_dict[block_id].rect.centery-self.block_dict[block_id2].rect.centery))
+
+        # for block_id in sorted(self.block_dict.keys()):
+        directions = ["-", "-","-"]
+        target_id=None
+        source_id=None
+        if self.selected_block_id != None:
+            source_id=self.selected_block_id
+            for stack_num in self.target_blocks:
+                if self.selected_block_id in self.target_blocks[stack_num]:
+                    target_id = self.target_blocks[stack_num][self.selected_block_id]
+                    some_list[0] = self.euclidean_dist(self.block_dict[self.selected_block_id],self.block_dict[target_id])
+                    if self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[
+                        target_id].rect.centerx > 0:
+                        directions[0] = 'l'
+                    elif self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[
+                        target_id].rect.centerx < 0:
+                        directions[0] = 'r'
+                    if self.block_dict[self.selected_block_id].rect.centery - self.block_dict[
+                        target_id].rect.centery > 0:
+                        directions[1] = 'u'
+                    elif self.block_dict[self.selected_block_id].rect.centery - self.block_dict[
+                        target_id].rect.centery < 0:
+                        directions[1] = 'd'
+                    #other_block = \
+                    #list(set([i for i in range(self.num_blocks)]).difference(set([self.selected_block_id, target_id])))[
+                    #    0]
+                    #if self.block_dict[other_block].rect.centerx == self.block_dict[target_id].rect.centerx and \
+                    #        self.block_dict[other_block].rect.centery - 50 == self.block_dict[target_id].rect.centery:
+                    #    directions[2] = "b"
+                else:
+                    target_id=self.selected_block_id
+                    for stack_num in self.target_blocks:
+                        for key, value in self.target_blocks[stack_num].items():
+                            if value == self.selected_block_id:
+                                source_id = key
+                                some_list[0] = self.euclidean_dist(self.block_dict[source_id],self.block_dict[target_id])
+                                if self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[
+                                    source_id].rect.centerx > 0:
+                                    directions[0] = 'l'
+                                elif self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[
+                                    source_id].rect.centerx < 0:
+                                    directions[0] = 'r'
+                                if self.block_dict[self.selected_block_id].rect.centery - self.block_dict[
+                                    source_id].rect.centery > 0:
+                                    directions[1] = 'u'
+                                elif self.block_dict[self.selected_block_id].rect.centery - self.block_dict[
+                                    source_id].rect.centery < 0:
+                                    directions[1] = 'd'
+                                #other_block = list(set([i for i in range(self.num_blocks)]).difference(
+                                #    set([self.selected_block_id, target_id])))[0]
+                                #if self.block_dict[other_block].rect.centerx == self.block_dict[
+                                #    target_id].rect.centerx and self.block_dict[other_block].rect.centery + 50 == \
+                                #        self.block_dict[target_id].rect.centery:
+                                #    directions[2] = "b"
+                for key in self.target_blocks[stack_num]:
+                    #print(self.block_dict[key].rect.centerx, self.block_dict[key].rect.centery)
+                    #print(self.block_dict[self.target_blocks[stack_num][key]].rect.centerx,
+                    #      self.block_dict[self.target_blocks[stack_num][key]].rect.centery)
+                    some_list[1] += self.euclidean_dist(self.block_dict[key],self.block_dict[self.target_blocks[stack_num][key]])
+        else:
+            distances = []
+            for stack_num in self.target_blocks:
+                for key in self.target_blocks[stack_num]:
+                    distances.append(self.euclidean_dist(self.block_dict[key],
+                                                         self.block_dict[self.target_blocks[stack_num][key]]))
+
+            some_list[0] = tuple(distances)
+
+        some_list[2] = tuple(directions)
+        some_list[-1] = self.selected_block_id
+        some_list.append((source_id,target_id))
 
         return tuple(some_list)
 
@@ -312,12 +394,14 @@ class BlockWorld:
         state_l = list(state)
         if action[0] == Action.DROP:
             state_l[-2] = None
-            state_l[1]=('-','-')
+            state_l[2]=('-','-')
             distances=[]
             for stack_num in self.target_blocks:
                 for key in self.target_blocks[stack_num]:
                     distances.append(self.euclidean_dist(self.block_dict[key], self.block_dict[self.target_blocks[stack_num][key]]))
             state_l[0] = tuple(distances)
+            state_l[1]=0
+            state_l[-1]=(None,None)
         else:
             state_l[-2] = action[1]
             state_l=self.get_next_state_pramodith(action[0],state_l[-2],state_l)
@@ -350,20 +434,24 @@ class BlockWorld:
                              self.blocks if other_block.rect != rectangle]
         orig_pos = rectangle.center
         if all(not_intersections):
+            state_l[1] = 0
+
             distances=[]
             if dx!=0 or dy!=0:
                 self.block_dict[sel_block_id].rect.centerx+=dx
                 self.block_dict[sel_block_id].rect.centery+=dy
             if self.selected_block_id==None:
                 self.selected_block_id=sel_block_id
-            directions = ["-", "-"]
+            directions = ["-", "-","-"]
+            source_id=None
+            target_id=None
+            state_l[-1]=(source_id,target_id)
+
             for stack_num in self.target_blocks:
                 if sel_block_id in self.target_blocks[stack_num]:
+                    source_id=sel_block_id
                     target_id = self.target_blocks[stack_num][sel_block_id]
-                    state_l[0] = np.square(
-                        self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx) + \
-                                    np.square(self.block_dict[self.selected_block_id].rect.centery - self.block_dict[
-                                        target_id].rect.centery)
+                    state_l[0] = self.euclidean_dist(self.block_dict[sel_block_id],self.block_dict[target_id])
                     if self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx > 0:
                         directions[0] = 'l'
                     elif self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx < 0:
@@ -372,22 +460,43 @@ class BlockWorld:
                         directions[1] = 'u'
                     elif self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery < 0:
                         directions[1] = 'd'
-                    state_l[1] = tuple(directions)
-            else:
-                for stack_num in self.target_blocks:
-                    for key,value in self.target_blocks[stack_num].items():
-                        if value==self.selected_block_id:
-                            target_id=key
-                            state_l[0] = np.square(self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx) + \
-                                           np.square(self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery)
-                            if self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx > 0:
-                                directions[0] = 'l'
-                            elif self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[target_id].rect.centerx < 0:
-                                directions[0] = 'r'
-                            if self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery > 0:
-                                directions[1] = 'u'
-                            elif self.block_dict[self.selected_block_id].rect.centery - self.block_dict[target_id].rect.centery < 0:
-                                directions[1] = 'd'
+                    #other_block = \
+                    #list(set([i for i in range(self.num_blocks)]).difference(set([self.selected_block_id, target_id])))[0]
+                    #if self.block_dict[other_block].rect.centerx == self.block_dict[target_id].rect.centerx and \
+                    #        self.block_dict[other_block].rect.centery - 50 == self.block_dict[target_id].rect.centery:
+                    #    directions[2] = "b"
+                else:
+                    target_id = self.selected_block_id
+                    for stack_num in self.target_blocks:
+                        for key, value in self.target_blocks[stack_num].items():
+                            if value == self.selected_block_id:
+                                source_id = key
+                                state_l[0] = self.euclidean_dist(self.block_dict[source_id],
+                                                                   self.block_dict[target_id])
+                                if self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[source_id].rect.centerx > 0:
+                                    directions[0] = 'l'
+                                elif self.block_dict[self.selected_block_id].rect.centerx - self.block_dict[source_id].rect.centerx < 0:
+                                    directions[0] = 'r'
+                                if self.block_dict[self.selected_block_id].rect.centery - self.block_dict[source_id].rect.centery > 0:
+                                    directions[1] = 'u'
+                                elif self.block_dict[self.selected_block_id].rect.centery - self.block_dict[source_id].rect.centery < 0:
+                                    directions[1] = 'd'
+                                #other_block = list(set([i for i in range(self.num_blocks)]).difference(
+                                #    set([self.selected_block_id, target_id])))[0]
+                                #if self.block_dict[other_block].rect.centerx == self.block_dict[
+                                #    target_id].rect.centerx and self.block_dict[other_block].rect.centery + 50 == \
+                                #        self.block_dict[target_id].rect.centery:
+                                #    directions[2] = "b"
+
+
+                for key in self.target_blocks[stack_num]:
+                    #print(self.block_dict[key].rect.centerx, self.block_dict[key].rect.centery)
+                    #print(self.block_dict[self.target_blocks[stack_num][key]].rect.centerx, self.block_dict[self.target_blocks[stack_num][key]].rect.centery)
+                    state_l[1] += self.euclidean_dist(self.block_dict[key],self.block_dict[self.target_blocks[stack_num][key]])
+
+            state_l[2] = tuple(directions)
+            state_l[-1]=(source_id, target_id)
+
         return state_l
 
 
