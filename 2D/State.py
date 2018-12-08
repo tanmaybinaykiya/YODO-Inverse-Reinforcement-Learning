@@ -25,9 +25,9 @@ class State:
     def compute_goal_positions(self):
         block_count = self.block_count
         median_x = sum(self.get_position(idx)[0] for idx in range(self.block_count)) // self.block_count
-        median_x = 25 + median_x - median_x % self.block_size
+        median_x = self.block_size//2 + median_x - median_x % self.block_size
         median_y = sum(self.get_position(idx)[1] for idx in range(self.block_count)) // self.block_count
-        median_y = 25 + median_y - median_y % self.block_size
+        median_y = self.block_size//2 + median_y - median_y % self.block_size
         goal_position = [None for _ in range(block_count)]
 
         if block_count % 2 == 1:
@@ -94,7 +94,7 @@ class State:
                 return False
         return True
 
-    def is_action_allowed(self, move_action, idx, screen_dims):
+    def is_action_good(self, move_action, idx):
         def get_next_state(action):
             new_state: State = self.copy()
             old_position: tuple = self.block_positions[idx]
@@ -102,9 +102,36 @@ class State:
             return new_state
 
         new_block_position = get_next_state(move_action).block_positions[idx]
-        in_bounding_box = State.is_in_bounding_box(new_block_position, self.block_size, screen_dims=screen_dims)
+        in_bounding_box = State.is_in_bounding_box(new_block_position, self.block_size, screen_dims=self.screen_dims)
         is_not_colliding = not any([tuple(new_block_position) == tuple(block_position) for block_position in self.block_positions])
         return in_bounding_box and is_not_colliding
+
+    def is_action_allowed(self, move_action, idx):
+        return self.is_action_good(move_action, idx) and not self.is_action_blocking_goal(move_action, idx)
+
+    def is_action_blocking_goal(self, move_action, idx):
+        def get_next_state(action):
+            new_state: State = self.copy()
+            old_position: tuple = self.block_positions[idx]
+            new_state.block_positions[idx] = (old_position[0] + action_to_deviation_map[action][0], old_position[1] + action_to_deviation_map[action][1])
+            return new_state
+
+        new_block_position = get_next_state(move_action).block_positions[idx]
+        return self.is_state_blocking_goal(new_block_position, idx)
+
+    def is_state_blocking_goal(self, new_block_position, idx):
+        am_blocking_goal = any([tuple(goal_position) == tuple(new_block_position) for goal_position in self.goal_positions])
+        am_blocking_my_goal = tuple(new_block_position) == tuple(self.goal_positions[idx])
+        return am_blocking_goal and not am_blocking_my_goal
+
+    def all_goals_blocked(self):
+        for goalIdx, goalPos in enumerate(self.goal_positions):
+            this_goal_blocked = False
+            for blockidx, block_position in enumerate(self.block_positions):
+                this_goal_blocked = this_goal_blocked or tuple(block_position) == tuple(goalPos)
+            if not this_goal_blocked:
+                return False
+        return True
 
     def get_target_blocks(self):
         target_blocks = {}

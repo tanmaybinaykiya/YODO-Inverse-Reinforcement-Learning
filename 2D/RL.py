@@ -160,15 +160,15 @@ class RLTrainer:
             next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
             new_reward = block_world.get_reward_for_state(next_state, curr_state)
             new_reward += block_world.get_reward_for_state_action_pramodith(curr_state, next_state)
-            print("Reward")
-            print(new_reward)
+            # print("Reward")
+            # print(new_reward)
 
             if new_reward>=100:
                 print("Converged in %d", cnt)
                 return cnt
             #if self.debug:
 
-            print("q:", q_old.get(str(curr_state),None))
+            # print("q:", q_old.get(str(curr_state),None))
             block_world.update_state_from_tuple_pramodith(next_state)
 
             block_world.render()
@@ -191,8 +191,9 @@ class RLTrainer:
         nu = starting_nu
         block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, self.stack_count, record=False)
         if self.debug: print("Goal: ", [[COLORS_STR[i] for i in stack if i>=0] for stack in block_world.goal_config])
-        state_s = State(block_positions=[[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in range(self.blocks_count)],
-            selected_index=block_world.selected_block_id, goal_config=block_world.goal_config, screen_dims=(block_world.screen_width, block_world.screen_height))
+        state_s = State([[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in range(self.blocks_count)],
+            selected_index=block_world.selected_block_id, goal_config=block_world.goal_config,
+            screen_dims=(block_world.screen_width, block_world.screen_height))
         block_world.goal_loc = state_s.goal_positions
 
         remaining_prob=1-nu
@@ -209,30 +210,30 @@ class RLTrainer:
                 q[curr_state]={}
             #print("Current State: ", curr_state)
 
-            '''
-            if np.random.rand() < 0.01:
-                state_s = State(
-                    [[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in
-                     range(self.blocks_count)],
-                    block_world.selected_block_id, block_world.goal_config)
-                block_world.goal_loc = state_s.goal_positions
+            if np.random.rand() < 2:
+                state_s = State([[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in range(self.blocks_count)],
+                    selected_index=block_world.selected_block_id, goal_config=block_world.goal_config,
+                    screen_dims=(block_world.screen_width, block_world.screen_height))
+                if state_s.goal_reached():
+                    print("REACHED...")
+                    break
+                # block_world.goal_loc = state_s.goal_positions
                 action, block_id = self.get_next_action_supervised_t(state_t=None, state_s=state_s, q=None, nu=0)
-            '''
-            #else:
-            action, block_id = self.get_next_action(curr_state, q, nu)
-            if action==Action.PICK or action==Action.DROP:
-                actions_queue.append(0)
             else:
-                actions_queue.append(1)
+                action, block_id = self.get_next_action(curr_state, q, nu)
+                if action==Action.PICK or action==Action.DROP:
+                    actions_queue.append(0)
+                else:
+                    actions_queue.append(1)
 
             state_distance_queue.append(curr_state[0])
-            if len(state_distance_queue)==6:
-                if (len(set(list(state_distance_queue)[0::2]))==1 and len(set(list(state_distance_queue)[1::2]))==1) or do_next>0:
-                    state_s = State(block_positions=[[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in range(self.blocks_count)],
-                        selected_index=block_world.selected_block_id, goal_config=block_world.goal_config, screen_dims=(block_world.screen_width, block_world.screen_height))
-                    state_s.goal_positions = block_world.goal_loc
-                    action, block_id = self.get_next_action_supervised_t(state_t=None, state_s=state_s, q=None, nu=0)
-                    print("Oracle action:", action)
+            # if len(state_distance_queue)==6:
+            #     if (len(set(list(state_distance_queue)[0::2]))==1 and len(set(list(state_distance_queue)[1::2]))==1) or do_next>0:
+            #         state_s = State(block_positions=[[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in range(self.blocks_count)],
+            #             selected_index=block_world.selected_block_id, goal_config=block_world.goal_config, screen_dims=(block_world.screen_width, block_world.screen_height))
+            #         # state_s.goal_positions = block_world.goal_loc
+            #         action, block_id = self.get_next_action_supervised_t(state_t=None, state_s=state_s, q=None, nu=0)
+            #         print("Oracle action:", action)
 
             #action, block_id = self.get_next_action(curr_state, q, nu)
             #if action==Action.DROP:
@@ -276,7 +277,7 @@ class RLTrainer:
 
             # converged = ever_seen_goal and q == q_old
             #q_old = q
-            time.sleep(0.1)
+            # time.sleep(0.1)
         pygame.display.quit()
         #self.test_q_learning_real(q)
         RLTrainer.save_obj(q,"Q\q_oracle")
@@ -408,7 +409,7 @@ class RLTrainer:
         if state_s.selected_index is None:
             return Action.PICK, random.randint(0, state_s.block_count-1)
         else:
-            best_action, self.order = Oracle.get_oracle_best_action(state = state_s, block_idx=state_s.selected_index, order=self.order, screen_dims=(self.states_x, self.states_y))
+            best_action, self.order = Oracle.get_oracle_best_action(state = state_s, block_idx=state_s.selected_index, order=self.order)
         print("Oracle action: %s" % best_action)
         return best_action, state_s.selected_index
         # elif rand_val < 0.67:
@@ -442,8 +443,8 @@ if __name__ == '__main__':
     use_old=False
     nu = 0.1
 
-    for i in range(1):
-         RLTrainer(states_x=350, states_y=350, blocks_count=3,stack_count=1, iteration_count=5000, debug=True).q_learning_real(use_old=use_old,starting_nu=nu)
+    for i in range(50):
+         RLTrainer(states_x=350, states_y=350, blocks_count=3,stack_count=1, iteration_count=5000, debug=False).q_learning_real(use_old=use_old,starting_nu=nu)
          use_old=True
 
 
