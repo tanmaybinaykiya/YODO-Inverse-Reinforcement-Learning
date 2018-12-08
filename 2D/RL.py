@@ -6,7 +6,7 @@ import pygame
 from BlockWorld_t import BlockWorld
 from constants import Action, COLORS_STR
 import time
-import numpy as np
+import random
 from Oracle import Oracle
 import pickle
 from State import State
@@ -182,8 +182,11 @@ class RLTrainer:
         nu = starting_nu
         block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, self.stack_count, record=False)
         if self.debug: print("Goal: ", [[COLORS_STR[i] for i in stack if i>=0] for stack in block_world.goal_config])
+        state_s = State([[block_world.block_dict[i].rect.centerx,block_world.block_dict[i].rect.centery] for i in range(self.blocks_count)],
+                      block_world.selected_block_id,block_world.goal_config)
+        block_world.goal_loc = state_s.goal_positions
 
-        ever_seen_goal = False
+        # ever_seen_goal = False
         cnt=0
         q = q_old.copy()
         while cnt<self.iteration_count:
@@ -195,16 +198,10 @@ class RLTrainer:
             if curr_state not in q:
                 q[curr_state]={}
             print("Current State: ", curr_state)
-            state_s = State([[block_world.block_dict[i].rect.centerx,block_world.block_dict[i].rect.centery] for i in range(self.blocks_count)],
-                          block_world.selected_block_id,block_world.goal_config)
-            # if state_s.selected_index == None:
-            #     action,block_id=(Action.PICK, np.random.randint(0, state_s.block_count - 1))
-            #
-            #
-            # else:
-            #     action, self.order = Oracle.get_oracle_best_action(state_s, state_s.selected_index, self.order)
-            #     block_id = state_s.selected_index
 
+            state_s = State([[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery]
+                for i in range(self.blocks_count)], block_world.selected_block_id, block_world.goal_config)
+            state_s.goal_positions = block_world.goal_loc
             action, block_id = self.get_next_action_supervised_t(state_t=None, state_s=state_s, q=None, nu=0)
 
             #action, block_id = self.get_next_action(curr_state, q, nu)
@@ -213,13 +210,12 @@ class RLTrainer:
             if self.debug: print("Action: ", action, block_id)
             next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
             new_reward = block_world.get_reward_for_state(next_state,curr_state)
-            new_reward+= block_world.get_reward_for_state_action_pramodith(curr_state,next_state)
+            new_reward+= block_world.get_reward_for_state_action_pramodith(curr_state, next_state)
             if new_reward>1 or new_reward<-1:
                 if self.debug: print("next_state: ", next_state)
                 if self.debug: print("new_reward: ", new_reward)
 
-
-            ever_seen_goal = ever_seen_goal or new_reward == 1
+            # ever_seen_goal = ever_seen_goal or new_reward == 1
             if (action,block_id) in q[curr_state]:
                 q_sa = q[curr_state][(action, block_id)]
             else:
@@ -233,7 +229,6 @@ class RLTrainer:
             if self.debug: print("max_q:", max_q_dash_s_dash_a_dash)
             if new_reward > 70:
                 q[curr_state][(action, block_id)] = ((1 - alpha) * q_sa) + (alpha * (new_reward))
-                break
             else:
                 q[curr_state][(action, block_id)] += alpha * (new_reward + gamma * (max_q_dash_s_dash_a_dash) - q_sa)
 
@@ -249,7 +244,7 @@ class RLTrainer:
 
             block_world.render()
 
-            converged = ever_seen_goal and q == q_old
+            # converged = ever_seen_goal and q == q_old
             #q_old = q
             time.sleep(0.1)
         pygame.display.quit()
@@ -381,10 +376,10 @@ class RLTrainer:
         # rand_val = np.random.rand()
         # if rand_val < 0.8:
         if state_s.selected_index is None:
-            return Action.PICK, np.random.randint(0, state_s.block_count - 1)
+            return Action.PICK, random.randint(0, state_s.block_count-1)
         else:
-            best_action, self.order = Oracle.get_oracle_best_action(state_s, state_s.selected_index, self.order)
-        print("Oracle action: %s"% best_action)
+            best_action, self.order = Oracle.get_oracle_best_action(state = state_s, block_idx=state_s.selected_index, order=self.order, screen_dims=(self.states_x, self.states_y))
+        print("Oracle action: %s" % best_action)
         return best_action, state_s.selected_index
         # elif rand_val < 0.67:
         #     if state_t in q and len(q[state_t]) > 0:
@@ -417,10 +412,9 @@ if __name__ == '__main__':
     use_old=False
     nu = 0.1
 
-    for i in range(1):
-         RLTrainer(states_x=350, states_y=350, blocks_count=3,stack_count=1, iteration_count=5000, debug=True).q_learning_real(use_old=use_old,starting_nu=nu)
+    for i in range(10):
+         RLTrainer(states_x=350, states_y=350, blocks_count=3,stack_count=1, iteration_count=5000, debug=False).q_learning_real(use_old=use_old,starting_nu=nu)
          use_old=True
-
 
     #q = RLTrainer.load_obj("Q\q_oracle")
     '''

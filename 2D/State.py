@@ -74,9 +74,15 @@ class State:
         return "Positions: %s, Goal: %s, Selected: %s" % (self.block_positions, self.goal_positions, self.selected_index)
 
     def goal_reached(self):
-        return all([self.block_positions[idx][0] == self.block_positions[idx + 1][0]  and self.block_positions[idx][1] - self.block_positions[idx + 1][1] == -self.block_size for idx in range(self.block_count-1)])
+        for i in range(self.block_count-1):
+            this_block = self.get_position(self.goal_config[0][i])
+            next_block = self.get_position(self.goal_config[0][i+1])
+            val = this_block[0] == next_block[0] and this_block[1] - next_block[1] == self.block_size
+            if not val :
+                return False
+        return True
 
-    def is_action_allowed(self, move_action, idx):
+    def is_action_allowed(self, move_action, idx, screen_dims):
         def get_next_state(action):
             new_state: State = self.copy()
             old_position: tuple = self.block_positions[idx]
@@ -84,7 +90,9 @@ class State:
             return new_state
 
         new_block_position = get_next_state(move_action).block_positions[idx]
-        return not any([new_block_position == block_position for block_position in self.block_positions])
+        in_bounding_box = State.is_in_bounding_box(new_block_position, self.block_size, screen_dims=screen_dims)
+        is_not_colliding = not any([tuple(new_block_position) == tuple(block_position) for block_position in self.block_positions])
+        return in_bounding_box and is_not_colliding
 
     def get_target_blocks(self):
         target_blocks = {}
