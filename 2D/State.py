@@ -74,7 +74,14 @@ class State:
         return "Positions: %s, Goal: %s, Selected: %s" % (self.block_positions, self.goal_positions, self.selected_index)
 
     def goal_reached(self):
-        return all([self.block_positions[idx][0] == self.block_positions[idx + 1][0]  and self.block_positions[idx][1] - self.block_positions[idx + 1][1] == -self.block_size for idx in range(self.block_count-1)])
+        for i in range(self.block_count-1):
+            this_block = self.get_position(self.goal_config[0][i])
+            next_block = self.get_position(self.goal_config[0][i+1])
+            val = this_block[0] == next_block[0] and this_block[1] - next_block[1] == self.block_size
+            if not val :
+                return False
+        return True
+
 
     def is_action_allowed(self, move_action, idx):
         def get_next_state(action):
