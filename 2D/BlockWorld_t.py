@@ -65,7 +65,7 @@ class BlockWorld:
         block_order = [i for i in range(self.num_blocks)]
 
         seed = np.random.randint(0, self.num_stacks)
-        #block_order=[0,1]
+        #block_order=[0,1,2]
         random.shuffle(block_order)
         last_used_block = 0
         blocks_per_stack = self.num_blocks // self.num_stacks
