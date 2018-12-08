@@ -19,6 +19,7 @@ CYAN = Color["CYAN"]
 WHITE = Color["WHITE"]
 GRAY = Color["GRAY"]
 
+CLICKED_COLOR={0:(253,163,163),1:(163,163,253),2:(163,253,163),3:(247,253,163)}
 COLORS = [Color["RED"], Color["BLUE"], Color["GREEN"], Color["YELLOW"], Color["CYAN"], Color["WHITE"]]
 COLORS_STR = ["RED", "BLUE", "GREEN", "YELLOW", "CYAN", "WHITE"]
 FRAME_LOCATION = "Demonstrations"

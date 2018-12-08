@@ -20,7 +20,7 @@ class Block(pygame.sprite.Sprite):
 
 class BlockWorld:
 
-    def __init__(self, screen_width, screen_height, num_blocks=3, num_stacks=1, block_size=50, record=False):
+    def __init__(self, screen_width, screen_height, num_blocks=3, num_stacks=1, block_size=50, goal_config=None, record=False):
         self.screen_width = screen_width
         self.screen_height = screen_height
         self.goal_screen_dim = (self.screen_width // 5, self.screen_width // 5)
@@ -43,7 +43,7 @@ class BlockWorld:
 
         self.goal_surface = pygame.Surface(self.goal_screen_dim)
         self.goal_surface.fill(GRAY)
-        self.goal_config = self.create_goal()
+        self.goal_config = self.create_goal(goal_config)
         pygame.init()
 
         self.selected_block_id = None
@@ -53,16 +53,20 @@ class BlockWorld:
     def distance(pts1, pts2):
         return (pts1[0] - pts2[0]) ** 2 + (pts1[1] - pts2[1]) ** 2
 
-    def create_goal(self, goal_config=None):
-        if goal_config is None:
-            goal_config = (-np.ones((self.num_stacks, self.num_blocks), dtype=np.int8)).tolist()
+    def create_goal(self, goal_config_given=None):
+        goal_config = (-np.ones((self.num_stacks, self.num_blocks), dtype=np.int8)).tolist()
+        if goal_config_given is None:
 
-        # choosing the order for blocks to be placed in the goal screen.
-        block_order = [i for i in range(self.num_blocks)]
+            block_order=[i for i in range(self.num_blocks)]
+            seed = np.random.randint(0, self.num_stacks)
+            #block_order=[0,1,2]
+            random.shuffle(block_order)
 
-        seed = np.random.randint(0, self.num_stacks)
-        #block_order=[0,1,2]
-        random.shuffle(block_order)
+            #choosing the order for blocks to be placed in the goal screen.
+
+        else:
+            block_order = goal_config_given[:]
+
         last_used_block = 0
         blocks_per_stack = self.num_blocks // self.num_stacks
         block_size = self.goal_screen_dim[0] // 10

@@ -1,10 +1,10 @@
 import json
-
+import argparse
 import numpy as np
 import pygame
 from pygame.locals import *
 from BlockWorld_t import BlockWorld
-from constants import Action, COLORS_STR
+from constants import Action, COLORS_STR,CLICKED_COLOR,COLORS
 import time
 import numpy as np
 import pickle
@@ -102,7 +102,7 @@ class Demonstrations:
             #time.sleep(0.1)
         return cnt
 
-    def q_learning_real(self, starting_nu=0.0,use_old=True,record=False,demo_id=1):
+    def q_learning_real(self, starting_nu=0.0,use_old=True,record=False,demo_id=1,goal_config=None):
         alpha = 1
         gamma = 0.1
         record_actions={}
@@ -114,7 +114,7 @@ class Demonstrations:
         else:
             q_old={}
         nu = starting_nu
-        block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, self.stack_count, record=False)
+        block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, self.stack_count, record=False,goal_config=goal_config)
         if record:
             record_actions["starting_state"]=[(block_world.block_dict[i].rect.centerx,block_world.block_dict[i].rect.centery) for i in range(self.blocks_count)]
             record_actions["goal_config"]=[block_world.goal_config]
@@ -133,6 +133,7 @@ class Demonstrations:
 
             user_choice=False
             for i in range(10):
+
                 time.sleep(0.1)
                 for event in pygame.event.get():
                     if event.type == KEYUP:
@@ -155,17 +156,28 @@ class Demonstrations:
                         for block in block_world.block_dict.values():
                             if block.rect.collidepoint(pos):
                                 user_choice=True
+                                if block_id:
+                                    block_world.block_dict[block_id].surf.fill(COLORS[block_id])
                                 block_id = block.id
+                                action=Action.PICK
+                                #block_world.block_dict[block_id].surf.fill(CLICKED_COLOR[block_id])
                                 break
 
             if not user_choice:
                 action, block_id = self.get_next_action(curr_state, q, nu)
+
                 if record:
                     record_actions["actions"].append(('algorithm',action,block_id))
             else:
                 print('Skipping models choice to listen to the expert')
                 if record:
                     record_actions["actions"].append(('user',action,block_id))
+            if action==Action.DROP:
+                block_world.block_dict[block_id].surf.fill(COLORS[block_id])
+            else:
+                block_world.block_dict[block_id].surf.fill(CLICKED_COLOR[block_id])
+
+
             if self.debug: print("Action: ", action, block_id)
             next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
             new_reward = block_world.get_reward_for_state(next_state,curr_state)
@@ -210,11 +222,36 @@ if __name__ == '__main__':
     use_old=True
     nu = 0.1
     demo_id=1
-    for i in range(2):
-         Demonstrations(states_x=350, states_y=350, blocks_count=3,stack_count=1, iteration_count=5000, debug=True)\
-             .q_learning_real(use_old=use_old,starting_nu=nu,demo_id=demo_id,record=True)
-         use_old=True
-         demo_id+=1
+    goal_config=[[[0,1],[1,0]],[[0,1,2],[2,1,0],[0,1,2]]]
+    print("Welcome to the blockworld demonstration.")
+    print("Controls are: \n\n UP_ARROW:MOVE_UP \n\n DOWN_ARROW: MOVE_DOWN \n\n RIGHT_ARROW: MOVE_RIGHT \n\n LEFT_ARROW: MOVE_LEFT \n\n MOUSE_CLICK: PICKS A BLOCK \n\n SPACE_BAR: DROPS THE SELECTED BLOCK")
+    print("\nThe currently active block has a ligher shade of it's original color and on dropping the block, it becomes darker.")
+    print("\nThe goal configuration is given in the tiny screen at the top right corner")
+
+    goal_choice=input("Press 1 if you want to demonstrate the same goal, 2 if you want to demonstrate a random goal.")
+    while(goal_choice==1 or goal_choice==2):
+        print("Wrong choice!")
+        goal_choice = input("Press 1 if you want to demonstrate the same goal, 2 if you want to demonstrate a random goal.")
+    num_blocks=input("Enter the number of blocks you want in the world options are 2 or 3 \n")
+    while (num_blocks == 2 or num_blocks == 3):
+        print("Wrong choice!")
+        num_blocks = input("Enter the number of blocks you want in the world options are 2 or 3 \n")
+    goal_choice=int(goal_choice)
+    num_blocks = int(num_blocks)
+    if goal_choice==1:
+        chosen_goal=np.random.randint(0,num_blocks-1)
+        goal_config=goal_config[num_blocks-2][chosen_goal]
+    else:
+        goal_config=None
+    input=input("Press SPACE when you are ready for the task")
+
+
+    if input==" ":
+        for i in range(2):
+             Demonstrations(states_x=350, states_y=350, blocks_count=num_blocks,stack_count=1, iteration_count=5000, debug=True)\
+                 .q_learning_real(use_old=use_old,starting_nu=nu,demo_id=demo_id,record=True,goal_config=goal_config)
+             use_old=True
+             demo_id+=1
 
 
     #q = RLTrainer.load_obj("Q\q_oracle")
