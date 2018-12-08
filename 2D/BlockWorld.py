@@ -146,9 +146,9 @@ class BlockWorld:
     def get_reward_for_drop(self, action):
         return 500 if action == Action.DROP else 0
 
-    def get_reward_for_state_pramodith(self, state):
+    def get_reward_for_state_pramodith(self, state:State, next_state: State, next_state_p, curr_state_p):
         reward = 0
-        goal_reward = self.get_sparse_reward_for_state_pramodith(state)
+        goal_reward = self.get_sparse_reward_for_state_pramodith(curr_state=state, next_state=next_state, next_state_p=next_state_p, curr_state_p=curr_state_p)
         if goal_reward > 0:
             return goal_reward
         else:
@@ -177,21 +177,49 @@ class BlockWorld:
         else:
             return 0
 
-    def get_sparse_reward_for_state_pramodith(self, state):
+    # def get_sparse_reward_for_state_pramodith(self, state):
+    #     score = 0
+    #     target_blocks = state.get_target_blocks()
+    #
+    #     num_stacks_aligned = 1
+    #     if state.selected_index is None and euclidean_dist(self.block_dict[prev_state_p[-1][0]], self.block_dict[prev_state_p[-1][1]]) > 5000:
+    #         reward -= 0.1
+    #
+    #     for key in target_blocks:
+    #         target = state.get_position(key)
+    #         curr = state.get_position(target_blocks[key])
+    #         if curr[0] == target[0] and curr[1] - target[1] == self.block_size:
+    #             score += 1
+    #
+    #     if score > 0:
+    #         return 10 * (5 * score) * num_stacks_aligned + reward
+    #     else:
+    #         return 0
+
+    def get_sparse_reward_for_state_pramodith(self, curr_state: State, next_state: State, next_state_p, curr_state_p):
+        sel_block = next_state.selected_index
         score = 0
-        target_blocks = state.get_target_blocks()
-
+        drop_reward = 0
         num_stacks_aligned = 1
-        for key in target_blocks:
-            target = state.get_position(key)
-            curr = state.get_position(target_blocks[key])
-            if curr[0] == target[0] and curr[1] - target[1] == self.block_size:
-                score += 1
+        reward = 0
 
-        if score > 0:
-            return 50 * (4**score) * num_stacks_aligned
+        target_blocks = curr_state.get_target_blocks()
+
+        if sel_block is None and euclidean_dist(curr_state.get_position(curr_state.selected_index), curr_state.get_position(target_blocks[curr_state.selected_index])) > 5000:
+            reward -= 0.1
+        if any([next_state_p[i] != curr_state_p[i] for i in range(1, len(next_state_p))]) or type(next_state_p[0]) != type(curr_state_p[0]) or next_state_p[0] != curr_state_p[0]:
+            for key in target_blocks:
+                target = curr_state.get_position(key)
+                curr = curr_state.get_position(target_blocks[key])
+                if curr[0] == target[0] and curr[1] - target[1] == self.block_size:
+                    score += 1
+            if score > 0:
+                return 10 * (5 * score) * num_stacks_aligned + drop_reward + reward
+
         else:
-            return 0
+            return -0.1 + reward
+        return reward
+
 
     def get_dense_reward(self, block_states):
         goal_config = block_states[-1]
@@ -231,7 +259,7 @@ class BlockWorld:
             elif next_dist == curr_dist:
                 return 0
             else:
-                return -1
+                return -5
         return 0
 
 

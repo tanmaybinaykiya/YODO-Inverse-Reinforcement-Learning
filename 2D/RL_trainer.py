@@ -74,7 +74,7 @@ class RLTrainer:
         if state.selected_index is None:
             max_q = [(a, q[state_t].get(a, 0)) for a in self.pick_action_block_pairs]
         else:
-            max_q = [((a, state.selected_index), q[state_t].get((a, state.selected_index), 0)) for a in self.non_pick_actions]
+            max_q = [((a, state.selected_index), q[state_t].get(a, 0)) for a in self.non_pick_actions]
         max_values = [max_q[i][1] for i in range(len(max_q))]
         max_actions = [max_q[i][0] for i in range(len(max_q))]
         if max_values.count(max(max_values)) > 1:
@@ -99,7 +99,7 @@ class RLTrainer:
             return poss_actions[np.random.randint(0, len(poss_actions))]
 
     def get_next_action(self, state_t, state, q, nu):
-        if state in q and len(q[state]) > 0 and np.random.rand() > nu:
+        if state_t in q and len(q[state_t]) > 0 and np.random.rand() < nu:
             best_action = self.get_best_action(q, state_t, state)
 
             self.log("Best action:", args=best_action)
@@ -207,15 +207,11 @@ class RLTrainer:
         gamma = 0.5
         if q_old is None:
             q_old = {}
+        q = q_old
         nu = starting_nu
         block_world = BlockWorld(screen_width=self.states_x, screen_height=self.states_y, num_blocks=self.blocks_count,
             goal_config=self.goal_config)
-
-        self.log("Goal: %s", [COLORS_STR[i] for stack in block_world.get_state().goal_config for i in stack])
-
-        ever_seen_goal = False
         cnt = 0
-        q = q_old.copy()
         while cnt < self.iteration_count:
             block_world.pre_render(True)
 
@@ -238,12 +234,13 @@ class RLTrainer:
             if new_reward != 0:
                 self.log("Next State: %s, New Reward: %s", (next_state_s, new_reward))
 
-            ever_seen_goal = ever_seen_goal or new_reward == 1
-            if (action, block_id) in q[curr_state_t]:
-                q_sa = q[curr_state_t][(action, block_id)]
+            if action == Action.PICK:
+                action_ser = action, block_id
             else:
-                q_sa = 0
-                q[curr_state_t][(action, block_id)] = 0
+                action_ser = action
+
+            if action_ser not in q[curr_state_t]:
+                q[curr_state_t][action_ser] = 0
 
             if next_state_t in q and len(q[next_state_t]) > 0:
                 max_q_dash_s_dash_a_dash = max([q[next_state_t][a_dash] for a_dash in q[next_state_t]])
@@ -251,8 +248,8 @@ class RLTrainer:
                 max_q_dash_s_dash_a_dash = 0
             self.log("max_q: %s", max_q_dash_s_dash_a_dash)
 
-            q[curr_state_t][(action, block_id)] += alpha * (new_reward + gamma * max_q_dash_s_dash_a_dash - q_sa)
-            self.log("q: %s", q[curr_state_t][(action, block_id)])
+            q[curr_state_t][action ] += alpha * (new_reward + gamma * max_q_dash_s_dash_a_dash - q[curr_state_t][action_ser])
+            self.log("q: %s", q[curr_state_t][action_ser])
 
             if curr_state_s.goal_reached():
                 break
@@ -263,7 +260,7 @@ class RLTrainer:
         pygame.display.quit()
         return q
 
-    def q_learning_real(self, q_old=None, starting_nu=0.9):
+    def q_learning_real(self, q_old=None, starting_nu=0.5):
         alpha = 0.5
         gamma = 0.5
 
@@ -283,7 +280,7 @@ class RLTrainer:
             # while not converged:
             block_world.pre_render(True)
             curr_state_s = block_world.get_state()
-            # curr_state_p = curr_state_s.get_state_as_tuple_pramodith()
+            curr_state_p = curr_state_s.get_state_pramodith_repr()
             curr_state_t = curr_state_s.get_medial_state_repr()
 
             if curr_state_t not in q:
@@ -291,28 +288,35 @@ class RLTrainer:
 
             action, block_id = self.get_next_action(curr_state_t, curr_state_s, q, nu)
             next_state_s = block_world.get_state().get_next_state((action, block_id), block_world.get_screen_dims())
-            # next_state_p = next_state_s.get_state_as_tuple_pramodith()
+            next_state_p = next_state_s.get_state_pramodith_repr()
             next_state_t = next_state_s.get_medial_state_repr()
             self.log("Current State: %s, \nAction: %s, \nNext_state: %s", (curr_state_t, action, next_state_t))
 
-            new_reward = block_world.get_reward_for_goal(curr_state_s)
-            # new_reward += block_world.penalize_if_not_moved_in_goal_position(curr_state_s, next_state_s)
+            # new_reward = block_world.get_reward_for_goal(curr_state_s)
+            # # new_reward += block_world.get_manhattan_distance_reward()
+            # # new_reward += block_world.penalize_if_not_moved_in_goal_position(curr_state_s, next_state_s)
             # new_reward = block_world.get_reward_for_state_pramodith(curr_state_s)
-            # new_reward += block_world.get_reward_for_drop(action)
-            # new_reward += block_world.get_reward_for_state_action_pramodith(curr_state_p, next_state_p)
+            # # new_reward += block_world.get_reward_for_drop(action)
+            #
+            # # new_reward += block_world.get_sparse_reward_for_state_pramodith(curr_state=curr_state_s , next_state=next_state_s, next_state_p=next_state_p, curr_state_p=curr_state_p)
+            #
+            # # new_reward = block_world.get_reward_for_state(next_state)
+            # new_reward += block_world.get_reward_for_state_action_pramodith(curr_state, next_state)
 
-            # new_reward = block_world.old_get_reward_for_state(next_state)
-            # new_reward += block_world.old_get_reward_for_state_action_pramodith(curr_state, next_state)
+            new_reward = block_world.get_reward_for_state_pramodith(state= curr_state_s, next_state=next_state_s, next_state_p=next_state_p, curr_state_p=curr_state_p)
+            new_reward += block_world.get_reward_for_state_action_pramodith(curr_state_p, next_state_p)
+
 
             # if new_reward != 0:
             #     self.log("Next State: %s, New Reward: %s", (next_state_s, new_reward))
 
-            # ever_seen_goal = ever_seen_goal or new_reward == 1
-            if (action, block_id) in q[curr_state_t]:
-                q_sa = q[curr_state_t][(action, block_id)]
+            if action == Action.PICK:
+                action_ser = action, block_id
             else:
-                q_sa = 0
-                q[curr_state_t][(action, block_id)] = 0
+                action_ser = action
+
+            if action_ser not in q[curr_state_t]:
+                q[curr_state_t][action_ser] = 0
 
             if next_state_t in q and len(q[next_state_t]) > 0:
                 max_q_dash_s_dash_a_dash = max([q[next_state_t][a_dash] for a_dash in q[next_state_t]])
@@ -320,8 +324,8 @@ class RLTrainer:
                 max_q_dash_s_dash_a_dash = 0
             self.log("Max Q: %s", max_q_dash_s_dash_a_dash)
 
-            q[curr_state_t][(action, block_id)] += alpha * (new_reward + gamma * max_q_dash_s_dash_a_dash - q_sa)
-            self.log("Q[%s]: %s" %(curr_state_t, q[curr_state_t][(action, block_id)]))
+            q[curr_state_t][action_ser] += alpha * (new_reward + gamma * max_q_dash_s_dash_a_dash - q[curr_state_t][action_ser])
+            self.log("Q[%s][%s]: %s, Action:, ", (curr_state_t, q[curr_state_t][action_ser]), args=action_ser)
 
             block_world.update_state(next_state_s)
             block_world.render()
@@ -369,7 +373,7 @@ def train_supervised(filename):
     print("Training supervised...")
     q = None
     for itc in range(1):
-        q = RLTrainer(states_x=350, states_y=350, blocks_count=2, iteration_count=10, debug=True, goal_config=[[1,0,2]]).q_learning_supervised(q_old=q)
+        q = RLTrainer(states_x=350, states_y=350, blocks_count=2, iteration_count=10, debug=True, goal_config=[[1, 0, 2]]).q_learning_supervised(q_old=q)
         if itc % 10 == 0:
             print("Iterations:[%d], Q size:[%d]" % (itc, len(q)))
         save_obj(q, filename)
@@ -381,7 +385,7 @@ def test_rl(q_file_name):
     success = []
     failures = 0
     for _ in range(20):
-        result, iter_count = RLTrainer(states_x=350, states_y=350, blocks_count=3, iteration_count=1000, debug=False, goal_config=[[1,0,2]]).test_q_learning_real(q_loaded)
+        result, iter_count = RLTrainer(states_x=350, states_y=350, blocks_count=3, iteration_count=1000, debug=False, goal_config=[[1, 0, 2]]).test_q_learning_real(q_loaded)
         if result:
             print("\tSuccess", iter_count)
             success.append(iter_count)
@@ -394,8 +398,10 @@ def test_rl(q_file_name):
 def train_unsupervised(filename):
     print("Training Unsupervised...")
     q = None
-    for _ in range(5):
-        q = RLTrainer(states_x=350, states_y=350, blocks_count=3, iteration_count=1000, debug=False, goal_config=[[1,0,2]]).q_learning_real(q_old=q)
+    # q = load_obj(filename)
+
+    for _ in range(10):
+        q = RLTrainer(states_x=350, states_y=350, blocks_count=3, iteration_count=5000, debug=False, goal_config=[[1,0,2]]).q_learning_real(q_old=q)
         save_obj(q, filename)
 
 

@@ -143,7 +143,7 @@ class State:
 
         return tuple(transformed_pos), tuple(self.goal_config[0]), self.selected_index
 
-    def get_state_as_tuple_pramodith(self):
+    def get_state_pramodith_repr(self):
         target_blocks = self.get_target_blocks()
         some_list = [-1 for _ in range(3)]
         directions = ["-", "-"]

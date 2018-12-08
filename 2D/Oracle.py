@@ -4,6 +4,7 @@ import numpy as np
 
 from State import State
 from constants import *
+from BlockWorld import BlockWorld
 
 
 class Oracle:
@@ -29,7 +30,12 @@ class Oracle:
                 if state.is_action_allowed(Action.MOVE_LEFT, block_idx):
                     return Action.MOVE_LEFT, order
                 else:
-                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx):
+                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx) and state.is_action_allowed(Action.MOVE_UP, block_idx):
+                        if goal_position[1] > curr_position[1]:
+                            return Action.MOVE_DOWN, not order
+                        else:
+                            return Action.MOVE_UP, not order
+                    elif state.is_action_allowed(Action.MOVE_DOWN, block_idx):
                         return Action.MOVE_DOWN, not order
                     elif state.is_action_allowed(Action.MOVE_UP, block_idx):
                         return Action.MOVE_UP, not order
@@ -38,7 +44,12 @@ class Oracle:
                 if state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
                     return Action.MOVE_RIGHT, order
                 else:
-                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx):
+                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx) and state.is_action_allowed(Action.MOVE_UP, block_idx):
+                        if goal_position[1] > curr_position[1]:
+                            return Action.MOVE_DOWN, not order
+                        else:
+                            return Action.MOVE_UP, not order
+                    elif state.is_action_allowed(Action.MOVE_DOWN, block_idx):
                         return Action.MOVE_DOWN, not order
                     elif state.is_action_allowed(Action.MOVE_UP, block_idx):
                         return Action.MOVE_UP, not order
@@ -46,16 +57,26 @@ class Oracle:
                 if state.is_action_allowed(Action.MOVE_DOWN, block_idx):
                     return Action.MOVE_DOWN, order
                 else:
-                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx):
+                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx) and state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
+                        if goal_position[0] < curr_position[0]:
+                            return Action.MOVE_LEFT, not order
+                        else:
+                            return Action.MOVE_LEFT, not order
+                    elif state.is_action_allowed(Action.MOVE_LEFT, block_idx):
                         return Action.MOVE_LEFT, not order
                     elif state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
-                        return Action.MOVE_RIGHT, not order
+                        return Action.MOVE_LEFT, not order
 
             elif goal_position[1] < curr_position[1]:
                 if state.is_action_allowed(Action.MOVE_UP, block_idx):
                     return Action.MOVE_UP, order
                 else:
-                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx):
+                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx) and state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
+                        if goal_position[0] < curr_position[0]:
+                            return Action.MOVE_LEFT, not order
+                        else:
+                            return Action.MOVE_LEFT, not order
+                    elif state.is_action_allowed(Action.MOVE_LEFT, block_idx):
                         return Action.MOVE_LEFT, not order
                     elif state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
                         return Action.MOVE_RIGHT, not order
@@ -66,7 +87,12 @@ class Oracle:
                 if state.is_action_allowed(Action.MOVE_DOWN, block_idx):
                     return Action.MOVE_DOWN, order
                 else:
-                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx):
+                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx) and state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
+                        if goal_position[0] < curr_position[0]:
+                            return Action.MOVE_LEFT, not order
+                        else:
+                            return Action.MOVE_LEFT, not order
+                    elif state.is_action_allowed(Action.MOVE_LEFT, block_idx):
                         return Action.MOVE_LEFT, not order
                     elif state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
                         return Action.MOVE_RIGHT, not order
@@ -74,7 +100,12 @@ class Oracle:
                 if state.is_action_allowed(Action.MOVE_UP, block_idx):
                     return Action.MOVE_UP, order
                 else:
-                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx):
+                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx) and state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
+                        if goal_position[0] < curr_position[0]:
+                            return Action.MOVE_LEFT, not order
+                        else:
+                            return Action.MOVE_LEFT, not order
+                    elif state.is_action_allowed(Action.MOVE_LEFT, block_idx):
                         return Action.MOVE_LEFT, not order
                     elif state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
                         return Action.MOVE_RIGHT, not order
@@ -82,7 +113,12 @@ class Oracle:
                 if state.is_action_allowed(Action.MOVE_LEFT, block_idx):
                     return Action.MOVE_LEFT, order
                 else:
-                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx):
+                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx) and state.is_action_allowed(Action.MOVE_UP, block_idx):
+                        if goal_position[1] > curr_position[1]:
+                            return Action.MOVE_DOWN, not order
+                        else:
+                            return Action.MOVE_UP, not order
+                    elif state.is_action_allowed(Action.MOVE_DOWN, block_idx):
                         return Action.MOVE_DOWN, not order
                     elif state.is_action_allowed(Action.MOVE_UP, block_idx):
                         return Action.MOVE_UP, not order
@@ -91,24 +127,17 @@ class Oracle:
                 if state.is_action_allowed(Action.MOVE_RIGHT, block_idx):
                     return Action.MOVE_RIGHT, order
                 else:
-                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx):
+                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx) and state.is_action_allowed(Action.MOVE_UP, block_idx):
+                        if goal_position[1] > curr_position[1]:
+                            return Action.MOVE_DOWN, not order
+                        else:
+                            return Action.MOVE_UP, not order
+                    elif state.is_action_allowed(Action.MOVE_DOWN, block_idx):
                         return Action.MOVE_DOWN, not order
                     elif state.is_action_allowed(Action.MOVE_UP, block_idx):
                         return Action.MOVE_UP, not order
 
         return Action.DROP, order
-
-    @staticmethod
-    def get_next_state(state, action, block_idx):
-        if action == Action.PICK:
-            new_state = state.copy()
-            new_state.select(block_idx)
-        elif action == Action.DROP:
-            new_state = state.copy()
-            new_state.deselect()
-        else:
-            new_state = state.get_next_state(block_idx, action)
-        return new_state
 
     def run(self):
         curr_state = self.init_state
@@ -117,16 +146,16 @@ class Oracle:
         # bring all blocks together
         actions = []
         block_count = curr_state.block_count
-        curr_state.set_goal_positions(Oracle.get_goal_position(curr_state, self.goal_config, self.step_size))
+        # curr_state.set_goal_positions(Oracle.get_goal_position(curr_state, self.goal_config, self.step_size))
         action = None
 
         block_world = BlockWorld(self.window_width, self.window_height, num_blocks=block_count, num_stacks=1, block_size=self.step_size)
-        b_w_g_c = self.goal_config.copy()
-        b_w_g_c.tolist().reverse()
-        block_world.create_goal([b_w_g_c])
+        # b_w_g_c = self.goal_config.copy()
+        # b_w_g_c.tolist().reverse()
+        # block_world.create_goal([b_w_g_c])
 
         block_world.pre_render()
-        block_world.update_all_block_states(curr_state)
+        block_world.update_state(curr_state)
         block_world.render()
 
         flip_order = True
@@ -134,24 +163,25 @@ class Oracle:
         while not curr_state.goal_reached():
             actions_taken = []
 
-            if flip_order:
-                this_range = range(block_count)
-            else:
-                this_range = range(block_count - 1, -1, -1)
+            # if flip_order:
+            #     this_range = range(block_count)
+            # else:
+            #     this_range = range(block_count - 1, -1, -1)
 
-            for block_idx in this_range:
+            for block_idx in range(block_count):
                 if curr_state.get_position(block_idx) != curr_state.goal_positions[block_idx]:
                     actions.append((Action.PICK, block_idx))
+                    curr_state.selected_index = block_idx
                     while action != Action.DROP:
                         time.sleep(0.5)
-                        block_world.pre_render()
-                        action, flip_order = self.get_best_action(curr_state, block_idx, flip_order)
+                        block_world.pre_render(True)
+                        action, flip_order = Oracle.get_oracle_best_action(curr_state, block_idx, flip_order)
                         if action:
                             actions_taken.append(action)
                             print(block_idx, curr_state, action)
                             actions.append(action)
-                            curr_state = Oracle.get_next_state(curr_state, action, block_idx)
-                            block_world.update_all_block_states(curr_state)
+                            curr_state = curr_state.get_next_state((action, block_idx), (self.window_width, self.window_height))
+                            block_world.update_state(curr_state)
                             block_world.render()
                         else:
                             break
@@ -166,8 +196,9 @@ class Oracle:
         time.sleep(2)
         print(actions)
 
+
 if __name__ == '__main__':
     block_count = 2
     for _ in range(10):
-        oracle = Oracle(300, 300, 50, np.random.permutation(block_count), State([(50, 150), (250, 50)], None, None))
+        oracle = Oracle(300, 300, 50, np.random.permutation(block_count), State([(25, 125), (275, 75), (175, 225)], selected_index=None, goal_config=[[0, 2, 1]]))
         oracle.run()
