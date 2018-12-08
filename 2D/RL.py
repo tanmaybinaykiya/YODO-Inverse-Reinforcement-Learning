@@ -1,6 +1,6 @@
 import json
 from collections import defaultdict
-
+from collections import deque
 import numpy as np
 import pygame
 from BlockWorld_t import BlockWorld
