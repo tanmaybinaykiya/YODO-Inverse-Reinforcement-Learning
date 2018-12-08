@@ -1,6 +1,5 @@
 import os
 import random
-import time
 
 import numpy as np
 import pygame
@@ -8,7 +7,7 @@ import pygame
 from Block import Block
 from State import State
 from constants import *
-from utilities import manhattan_distance, euclidean_dist
+from utilities import euclidean_dist, manhattan_distance
 
 
 class BlockWorld:
@@ -65,7 +64,7 @@ class BlockWorld:
             bs = self.block_size
             init_config = [[bs // 2 + bs * np.random.randint(6), bs // 2 + bs * np.random.randint(6)] for _ in range(self.num_blocks)]
 
-        return State(block_positions=init_config, selected_index=selected_id, goal_config=goal_config)
+        return State(block_positions=init_config, selected_index=selected_id, goal_config=goal_config, screen_dims=(self.screen_width, self.screen_height))
 
     def create_block_dicts(self):
         for i, block_position in enumerate(self.state.block_positions):
@@ -143,10 +142,11 @@ class BlockWorld:
         else:
             return 0
 
-    def get_reward_for_drop(self, action):
+    @staticmethod
+    def get_reward_for_drop(action):
         return 500 if action == Action.DROP else 0
 
-    def get_reward_for_state_pramodith(self, state:State, next_state: State, next_state_p, curr_state_p):
+    def get_reward_for_state_pramodith(self, state: State, next_state: State, next_state_p, curr_state_p):
         reward = 0
         goal_reward = self.get_sparse_reward_for_state_pramodith(curr_state=state, next_state=next_state, next_state_p=next_state_p, curr_state_p=curr_state_p)
         if goal_reward > 0:
@@ -163,7 +163,7 @@ class BlockWorld:
     def get_manhattan_distance_reward_for_state(state):
         return -sum([manhattan_distance(block_position_i, block_position_j) for block_position_i in state.block_positions for block_position_j in state.block_positions])
 
-    def get_sparse_reward(self, state:State):
+    def get_sparse_reward(self, state: State):
         goal_config = state.goal_config
         score = 0
         block_size = self.block_size
@@ -176,25 +176,6 @@ class BlockWorld:
             return 1
         else:
             return 0
-
-    # def get_sparse_reward_for_state_pramodith(self, state):
-    #     score = 0
-    #     target_blocks = state.get_target_blocks()
-    #
-    #     num_stacks_aligned = 1
-    #     if state.selected_index is None and euclidean_dist(self.block_dict[prev_state_p[-1][0]], self.block_dict[prev_state_p[-1][1]]) > 5000:
-    #         reward -= 0.1
-    #
-    #     for key in target_blocks:
-    #         target = state.get_position(key)
-    #         curr = state.get_position(target_blocks[key])
-    #         if curr[0] == target[0] and curr[1] - target[1] == self.block_size:
-    #             score += 1
-    #
-    #     if score > 0:
-    #         return 10 * (5 * score) * num_stacks_aligned + reward
-    #     else:
-    #         return 0
 
     def get_sparse_reward_for_state_pramodith(self, curr_state: State, next_state: State, next_state_p, curr_state_p):
         sel_block = next_state.selected_index
@@ -219,7 +200,6 @@ class BlockWorld:
         else:
             return -0.1 + reward
         return reward
-
 
     def get_dense_reward(self, block_states):
         goal_config = block_states[-1]

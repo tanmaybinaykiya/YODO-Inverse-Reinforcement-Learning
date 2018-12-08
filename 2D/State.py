@@ -1,13 +1,12 @@
 import numpy as np
 
-from constants import move_action_to_deviation as action_to_deviation_map
-from constants import Action
-from utilities import euclidean_dist, sgn, manhattan_distance
-import numpy as np
+from constants import Action, move_action_to_deviation as action_to_deviation_map
+from utilities import euclidean_dist, manhattan_distance, sgn
+
 
 class State:
 
-    def __init__(self, block_positions, selected_index, goal_config, block_size=50):
+    def __init__(self, block_positions, selected_index, goal_config, screen_dims, block_size=50):
         """
         :type block_positions: list[tuple(int)]
         :type goal_positions: list[tuple(int)]
@@ -19,14 +18,16 @@ class State:
         self.selected_index = selected_index
         self.goal_config = goal_config
         self.block_size = block_size
+        self.screen_dims = screen_dims
+
         self.goal_positions = self.compute_goal_positions()
 
     def compute_goal_positions(self):
         block_count = self.block_count
         median_x = sum(self.get_position(idx)[0] for idx in range(self.block_count)) // self.block_count
-        median_x = 25 + median_x - median_x % self.block_size
+        median_x = self.block_size//2 + median_x - median_x % self.block_size
         median_y = sum(self.get_position(idx)[1] for idx in range(self.block_count)) // self.block_count
-        median_y = 25 + median_y - median_y % self.block_size
+        median_y = self.block_size//2 + median_y - median_y % self.block_size
         goal_position = [None for _ in range(block_count)]
 
         if block_count % 2 == 1:
@@ -35,6 +36,17 @@ class State:
         else:
             for idx, i in enumerate(self.goal_config[0]):
                 goal_position[i] = (median_x, median_y + self.block_size * (block_count // 2 - idx))
+
+        for _ in range(self.block_count):
+            if not State.is_in_bounding_box(goal_position[self.goal_config[0][-1]], block_size=self.block_size, screen_dims=self.screen_dims):
+                # move 50 down i.e. +50
+                for idx in range(block_count):
+                    goal_position[idx] = (goal_position[idx][0], goal_position[idx][1] + self.block_size)
+            elif not State.is_in_bounding_box(goal_position[self.goal_config[0][0]], block_size=self.block_size, screen_dims=self.screen_dims):
+                # move 50 up, i.e. -50
+                for idx in range(block_count):
+                    goal_position[idx] = (goal_position[idx][0], goal_position[idx][1] - self.block_size)
+
         return goal_position
 
     def get_position(self, block_index):
@@ -68,22 +80,21 @@ class State:
         return self.__deepcopy__()
 
     def __deepcopy__(self):
-        return State(block_positions = self.block_positions.copy(), goal_config=self.goal_config.copy(), selected_index=self.selected_index)
+        return State(block_positions=self.block_positions.copy(), goal_config=self.goal_config.copy(), selected_index=self.selected_index, screen_dims=tuple(self.screen_dims))
 
     def __repr__(self):
         return "Positions: %s, Goal: %s, Selected: %s" % (self.block_positions, self.goal_positions, self.selected_index)
 
     def goal_reached(self):
-        for i in range(self.block_count-1):
+        for i in range(self.block_count - 1):
             this_block = self.get_position(self.goal_config[0][i])
-            next_block = self.get_position(self.goal_config[0][i+1])
+            next_block = self.get_position(self.goal_config[0][i + 1])
             val = this_block[0] == next_block[0] and this_block[1] - next_block[1] == self.block_size
-            if not val :
+            if not val:
                 return False
         return True
 
-
-    def is_action_allowed(self, move_action, idx):
+    def is_action_good(self, move_action, idx):
         def get_next_state(action):
             new_state: State = self.copy()
             old_position: tuple = self.block_positions[idx]
@@ -91,13 +102,42 @@ class State:
             return new_state
 
         new_block_position = get_next_state(move_action).block_positions[idx]
-        return not any([new_block_position == block_position for block_position in self.block_positions])
+        in_bounding_box = State.is_in_bounding_box(new_block_position, self.block_size, screen_dims=self.screen_dims)
+        is_not_colliding = not any([tuple(new_block_position) == tuple(block_position) for block_position in self.block_positions])
+        return in_bounding_box and is_not_colliding
+
+    def is_action_allowed(self, move_action, idx):
+        return self.is_action_good(move_action, idx) and not self.is_action_blocking_goal(move_action, idx)
+
+    def is_action_blocking_goal(self, move_action, idx):
+        def get_next_state(action):
+            new_state: State = self.copy()
+            old_position: tuple = self.block_positions[idx]
+            new_state.block_positions[idx] = (old_position[0] + action_to_deviation_map[action][0], old_position[1] + action_to_deviation_map[action][1])
+            return new_state
+
+        new_block_position = get_next_state(move_action).block_positions[idx]
+        return self.is_state_blocking_goal(new_block_position, idx)
+
+    def is_state_blocking_goal(self, new_block_position, idx):
+        am_blocking_goal = any([tuple(goal_position) == tuple(new_block_position) for goal_position in self.goal_positions])
+        am_blocking_my_goal = tuple(new_block_position) == tuple(self.goal_positions[idx])
+        return am_blocking_goal and not am_blocking_my_goal
+
+    def all_goals_blocked(self):
+        for goalIdx, goalPos in enumerate(self.goal_positions):
+            this_goal_blocked = False
+            for blockidx, block_position in enumerate(self.block_positions):
+                this_goal_blocked = this_goal_blocked or tuple(block_position) == tuple(goalPos)
+            if not this_goal_blocked:
+                return False
+        return True
 
     def get_target_blocks(self):
         target_blocks = {}
-        for i in range(len(self.goal_config[0])-1):
-            target_blocks[i] = self.goal_config[0][i+1]
-        target_blocks[len(self.goal_config[0])-1] = self.goal_config[0][-2]
+        for i in range(len(self.goal_config[0]) - 1):
+            target_blocks[i] = self.goal_config[0][i + 1]
+        target_blocks[len(self.goal_config[0]) - 1] = self.goal_config[0][-2]
         return target_blocks
 
     def get_medial_state_repr(self):
@@ -106,7 +146,7 @@ class State:
             transformed_pos = (pos[0] - 25) // 50, (pos[1] - 25) // 50
             goal = self.get_goal_position(self.selected_index)
             transformed_goal = (goal[0] - 25) // 50, (goal[1] - 25) // 50
-            return sgn(transformed_pos[0]-transformed_goal[0]), sgn(transformed_pos[1]-transformed_goal[1]), manhattan_distance(transformed_pos, transformed_goal)
+            return sgn(transformed_pos[0] - transformed_goal[0]), sgn(transformed_pos[1] - transformed_goal[1]), manhattan_distance(transformed_pos, transformed_goal)
         else:
             transformed_x = [(pos[0] - 25) // 50 for pos in self.block_positions]
             transformed_y = [(pos[1] - 25) // 50 for pos in self.block_positions]
@@ -119,7 +159,6 @@ class State:
             return tuple(transformed_pos)
 
     def get_medial_state_repr_old(self):
-
         transformed_x = [(pos[0] - 25) // 50 for pos in self.block_positions]
         transformed_y = [(pos[1] - 25) // 50 for pos in self.block_positions]
 
@@ -131,7 +170,6 @@ class State:
         return tuple(transformed_pos), tuple(self.goal_config[0]), self.selected_index
 
     def get_medial_state_repr_older(self):
-
         transformed_x = [(pos[0] - 25) // 50 for pos in self.block_positions]
         transformed_y = [(pos[1] - 25) // 50 for pos in self.block_positions]
 
@@ -150,7 +188,7 @@ class State:
 
         return tuple(transformed_pos), tuple(self.goal_config[0]), self.selected_index
 
-    def get_state_pramodith_repr(self):
+    def get_state_as_tuple_pramodith(self):
         target_blocks = self.get_target_blocks()
         some_list = [-1 for _ in range(3)]
         directions = ["-", "-"]
@@ -204,10 +242,7 @@ class State:
 
     def get_state_as_dict(self):
         block_pos = self.block_positions
-        state = {
-                    "positions": {block_id: (block_pos[block_id][0], block_pos[block_id][1]) for block_id in block_pos},
-                    "selected": self.selected_index if self.selected_index is not None else -1
-                }
+        state = {"positions": {block_id: (block_pos[block_id][0], block_pos[block_id][1]) for block_id in block_pos}, "selected": self.selected_index if self.selected_index is not None else -1}
         return state
 
     def get_next_state(self, action: tuple, screen_dims):
@@ -222,21 +257,11 @@ class State:
         return new_state
 
     def get_rect(self, center):
-        return {
-            "left": center[0] - self.block_size // 2,
-            "right": center[0] + self.block_size // 2,
-            "bottom": center[1] + self.block_size // 2,
-            "top": center[1] - self.block_size // 2
-        }
+        return {"left": center[0] - self.block_size // 2, "right": center[0] + self.block_size // 2, "bottom": center[1] + self.block_size // 2, "top": center[1] - self.block_size // 2}
 
     @staticmethod
     def are_intersecting(rect1, dx, dy, other_rect):
-        return (other_rect["top"] <= rect1["top"] + dy < other_rect["bottom"]
-                and (other_rect["left"] <= rect1["left"] + dx < other_rect["right"]
-                     or other_rect["left"] < rect1["right"] + dx <= other_rect["right"])) \
-               or (other_rect["top"] < rect1["bottom"] + dy <= other_rect["bottom"]
-                   and (other_rect["left"] <= rect1["left"] + dx < other_rect["right"]
-                        or other_rect["left"] < rect1["right"] + dx <= other_rect["right"]))
+        return (other_rect["top"] <= rect1["top"] + dy < other_rect["bottom"] and (other_rect["left"] <= rect1["left"] + dx < other_rect["right"] or other_rect["left"] < rect1["right"] + dx <= other_rect["right"])) or (other_rect["top"] < rect1["bottom"] + dy <= other_rect["bottom"] and (other_rect["left"] <= rect1["left"] + dx < other_rect["right"] or other_rect["left"] < rect1["right"] + dx <= other_rect["right"]))
 
     @staticmethod
     def is_in_bounding_box(next_pos, block_size, screen_dims):
@@ -259,9 +284,13 @@ class State:
 
 
 def test_get_goal_position():
-    # goal_pos = get_goal_position(curr_state=State([(0, 0), (0, 50), (50, 50), (500, 500)], None, None), goal_config=[0, 2, 1, 3], step_size=self.step_size)
-    # print("Goal Position: ", goal_pos)
-    pass
+    state = State(block_positions=[[75, 25], [125, 25], [175, 25], [225, 25], [275, 25]], selected_index=None, goal_config=[[3, 2, 0, 1, 4]], screen_dims=(350, 350))
+    state.compute_goal_positions()
+    assert [(175, 125), (175, 75), (175, 175), (175, 225), (175, 25)] == state.goal_positions
+
+    state = State(block_positions=[[75, 325], [125, 325], [175, 325], [225, 325], [275, 325]], selected_index=None, goal_config=[[3, 2, 0, 1, 4]], screen_dims=(350, 350))
+    state.compute_goal_positions()
+    assert  [(175, 225), (175, 175), (175, 275), (175, 325), (175, 125)] == state.goal_positions
 
 
 def test_get_medial_position_rep():
@@ -270,4 +299,4 @@ def test_get_medial_position_rep():
 
 
 if __name__ == '__main__':
-    test_get_medial_position_rep()
+    test_get_goal_position()
