@@ -256,10 +256,10 @@ if __name__ == '__main__':
     print("Welcome to the Block World demonstration.")
     print("*" * 150)
     print("Controls: \n\n"
-          "\tUP_ARROW:MOVE_UP \n\n"
-          "\tDOWN_ARROW: MOVE_DOWN \n\n"
-          "\tRIGHT_ARROW: MOVE_RIGHT \n\n"
-          "\tLEFT_ARROW: MOVE_LEFT \n\n"
+          "\tUP_ARROW:MOVE UP \n\n"
+          "\tDOWN_ARROW: MOVE DOWN \n\n"
+          "\tRIGHT_ARROW: MOVE RIGHT \n\n"
+          "\tLEFT_ARROW: MOVE LEFT \n\n"
           "\tMOUSE_CLICK: PICKS A BLOCK \n\n"
           "\tSPACE_BAR: PAUSES/UNPAUSES THE GAME")
     print("*" * 150)
