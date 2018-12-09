@@ -3,7 +3,8 @@ import time
 import numpy as np
 
 from State import State
-from constants import *
+from constants import move_action_to_deviation, Action
+import random
 
 
 class Oracle:
@@ -20,7 +21,7 @@ class Oracle:
         return [action for action in move_action_to_deviation if 0 <= position[0] + move_action_to_deviation[action][0] < self.window_width and 0 <= position[1] + move_action_to_deviation[action][1] < self.window_height]
 
     @staticmethod
-    def get_oracle_best_action(state, block_idx, screen_dims, order=True):
+    def get_oracle_best_action(state: State, block_idx, order=True):
 
         if state.goal_reached():
             return Action.DROP, order
@@ -28,119 +29,60 @@ class Oracle:
         curr_position = state.get_position(block_idx)
         goal_position = state.get_goal_position(block_idx)
 
+        if tuple(curr_position) == tuple(goal_position):
+            return Action.DROP, False
+
+        is_goal_blocked = any([tuple(goal_position) == tuple(block_position) for block_position in state.block_positions])
+        am_blocking_goal = any([tuple(goal_position) == tuple(curr_position) for goal_position in state.goal_positions]) and not tuple(curr_position) == tuple(state.goal_positions[block_idx])
+
+        is_left_allowed = state.is_action_allowed(Action.MOVE_LEFT, block_idx)
+        is_right_allowed = state.is_action_allowed(Action.MOVE_RIGHT, block_idx)
+        is_down_allowed = state.is_action_allowed(Action.MOVE_DOWN, block_idx)
+        is_up_allowed = state.is_action_allowed(Action.MOVE_UP, block_idx)
+
+        is_left_good = state.is_action_good(Action.MOVE_LEFT, block_idx)
+        is_right_good = state.is_action_good(Action.MOVE_RIGHT, block_idx)
+        is_down_good = state.is_action_good(Action.MOVE_DOWN, block_idx)
+        is_up_good = state.is_action_good(Action.MOVE_UP, block_idx)
+
+        allowed_actions = []
+
+        if is_left_allowed: allowed_actions.append(Action.MOVE_LEFT)
+        if is_right_allowed: allowed_actions.append(Action.MOVE_RIGHT)
+        if is_down_allowed: allowed_actions.append(Action.MOVE_DOWN)
+        if is_up_allowed: allowed_actions.append(Action.MOVE_UP)
+
+        is_goal_to_the_left = goal_position[0] < curr_position[0]
+        is_goal_to_the_right = goal_position[0] > curr_position[0]
+        is_goal_to_the_top = goal_position[1] < curr_position[1]
+        is_goal_to_the_bottom = goal_position[1] > curr_position[1]
+
         if order:
-            if goal_position[0] < curr_position[0]:
-                if state.is_action_allowed(Action.MOVE_LEFT, block_idx, screen_dims):
-                    return Action.MOVE_LEFT, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx, screen_dims) and state.is_action_allowed(Action.MOVE_UP, block_idx, screen_dims):
-                        if goal_position[1] > curr_position[1]:
-                            return Action.MOVE_DOWN, not order
-                        else:
-                            return Action.MOVE_UP, not order
-                    elif state.is_action_allowed(Action.MOVE_DOWN, block_idx, screen_dims):
-                        return Action.MOVE_DOWN, not order
-                    elif state.is_action_allowed(Action.MOVE_UP, block_idx, screen_dims):
-                        return Action.MOVE_UP, not order
-
-            elif goal_position[0] > curr_position[0]:
-                if state.is_action_allowed(Action.MOVE_RIGHT, block_idx, screen_dims):
-                    return Action.MOVE_RIGHT, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx, screen_dims) and state.is_action_allowed(Action.MOVE_UP, block_idx, screen_dims):
-                        if goal_position[1] > curr_position[1]:
-                            return Action.MOVE_DOWN, not order
-                        else:
-                            return Action.MOVE_UP, not order
-                    elif state.is_action_allowed(Action.MOVE_DOWN, block_idx, screen_dims):
-                        return Action.MOVE_DOWN, not order
-                    elif state.is_action_allowed(Action.MOVE_UP, block_idx, screen_dims):
-                        return Action.MOVE_UP, not order
-            elif goal_position[1] > curr_position[1]:
-                if state.is_action_allowed(Action.MOVE_DOWN, block_idx, screen_dims):
-                    return Action.MOVE_DOWN, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx, screen_dims) and state.is_action_allowed(Action.MOVE_RIGHT, block_idx, screen_dims):
-                        if goal_position[0] < curr_position[0]:
-                            return Action.MOVE_LEFT, not order
-                        else:
-                            return Action.MOVE_LEFT, not order
-                    elif state.is_action_allowed(Action.MOVE_LEFT, block_idx, screen_dims):
-                        return Action.MOVE_LEFT, not order
-                    elif state.is_action_allowed(Action.MOVE_RIGHT, block_idx, screen_dims):
-                        return Action.MOVE_LEFT, not order
-
-            elif goal_position[1] < curr_position[1]:
-                if state.is_action_allowed(Action.MOVE_UP, block_idx, screen_dims):
-                    return Action.MOVE_UP, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx, screen_dims) and state.is_action_allowed(Action.MOVE_RIGHT, block_idx, screen_dims):
-                        if goal_position[0] < curr_position[0]:
-                            return Action.MOVE_LEFT, not order
-                        else:
-                            return Action.MOVE_LEFT, not order
-                    elif state.is_action_allowed(Action.MOVE_LEFT, block_idx, screen_dims):
-                        return Action.MOVE_LEFT, not order
-                    elif state.is_action_allowed(Action.MOVE_RIGHT, block_idx, screen_dims):
-                        return Action.MOVE_RIGHT, not order
-            else:
-                return Action.DROP, order
+            if is_left_good and is_goal_to_the_left:
+                return Action.MOVE_LEFT, order
+            elif is_right_good and is_goal_to_the_right:
+                return Action.MOVE_RIGHT, order
+            elif is_down_good and is_goal_to_the_bottom:
+                return Action.MOVE_DOWN, order
+            elif is_up_good and is_goal_to_the_top:
+                return Action.MOVE_UP, order
         else:
-            if goal_position[1] > curr_position[1]:
-                if state.is_action_allowed(Action.MOVE_DOWN, block_idx, screen_dims):
-                    return Action.MOVE_DOWN, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx, screen_dims) and state.is_action_allowed(Action.MOVE_RIGHT, block_idx, screen_dims):
-                        if goal_position[0] < curr_position[0]:
-                            return Action.MOVE_LEFT, not order
-                        else:
-                            return Action.MOVE_LEFT, not order
-                    elif state.is_action_allowed(Action.MOVE_LEFT, block_idx, screen_dims):
-                        return Action.MOVE_LEFT, not order
-                    elif state.is_action_allowed(Action.MOVE_RIGHT, block_idx, screen_dims):
-                        return Action.MOVE_RIGHT, not order
-            elif goal_position[1] < curr_position[1]:
-                if state.is_action_allowed(Action.MOVE_UP, block_idx, screen_dims):
-                    return Action.MOVE_UP, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_LEFT, block_idx, screen_dims) and state.is_action_allowed(Action.MOVE_RIGHT, block_idx, screen_dims):
-                        if goal_position[0] < curr_position[0]:
-                            return Action.MOVE_LEFT, not order
-                        else:
-                            return Action.MOVE_LEFT, not order
-                    elif state.is_action_allowed(Action.MOVE_LEFT, block_idx, screen_dims):
-                        return Action.MOVE_LEFT, not order
-                    elif state.is_action_allowed(Action.MOVE_RIGHT, block_idx, screen_dims):
-                        return Action.MOVE_RIGHT, not order
-            elif goal_position[0] < curr_position[0]:
-                if state.is_action_allowed(Action.MOVE_LEFT, block_idx, screen_dims):
-                    return Action.MOVE_LEFT, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx, screen_dims) and state.is_action_allowed(Action.MOVE_UP, block_idx, screen_dims):
-                        if goal_position[1] > curr_position[1]:
-                            return Action.MOVE_DOWN, not order
-                        else:
-                            return Action.MOVE_UP, not order
-                    elif state.is_action_allowed(Action.MOVE_DOWN, block_idx, screen_dims):
-                        return Action.MOVE_DOWN, not order
-                    elif state.is_action_allowed(Action.MOVE_UP, block_idx, screen_dims):
-                        return Action.MOVE_UP, not order
+            if is_down_good and is_goal_to_the_bottom:
+                return Action.MOVE_DOWN, order
+            elif is_up_good and is_goal_to_the_top:
+                return Action.MOVE_UP, order
+            elif is_left_good and is_goal_to_the_left:
+                return Action.MOVE_LEFT, order
+            elif is_right_good and is_goal_to_the_right:
+                return Action.MOVE_RIGHT, order
 
-            elif goal_position[0] > curr_position[0]:
-                if state.is_action_allowed(Action.MOVE_RIGHT, block_idx, screen_dims):
-                    return Action.MOVE_RIGHT, order
-                else:
-                    if state.is_action_allowed(Action.MOVE_DOWN, block_idx, screen_dims) and state.is_action_allowed(Action.MOVE_UP, block_idx, screen_dims):
-                        if goal_position[1] > curr_position[1]:
-                            return Action.MOVE_DOWN, not order
-                        else:
-                            return Action.MOVE_UP, not order
-                    elif state.is_action_allowed(Action.MOVE_DOWN, block_idx, screen_dims):
-                        return Action.MOVE_DOWN, not order
-                    elif state.is_action_allowed(Action.MOVE_UP, block_idx, screen_dims):
-                        return Action.MOVE_UP, not order
+        if am_blocking_goal and allowed_actions:
+            return random.choice(allowed_actions), not order
 
-        return Action.DROP, order
+        if is_goal_blocked:
+            return Action.DROP, not order
+
+        return Action.DROP, not order
 
     @staticmethod
     def get_next_state(state, action, block_idx):
