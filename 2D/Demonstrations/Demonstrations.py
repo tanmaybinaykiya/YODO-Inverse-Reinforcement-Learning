@@ -261,11 +261,15 @@ if __name__ == '__main__':
     demo_goal_config=[[0,1,2],[2,1,0],[1,2,0],[1,0,2]]
     np.random.shuffle(demo_goal_config)
     print("Welcome to the blockworld demonstration.")
+    print("Controls are: \n\n UP_ARROW:MOVE_UP \n\n DOWN_ARROW: MOVE_DOWN \n\n RIGHT_ARROW: MOVE_RIGHT \n\n LEFT_ARROW: MOVE_LEFT \n\n MOUSE_CLICK: PICKS A BLOCK \n\n SPACE_BAR: PAUSES\\UNPAUSES THE GAME")
     print("The simulation shows a partially working algorithm that tries to stack blocks in the given goal configuration. \n The agent will attempt to move the blocks, your task"
-          "is to correct the agent whenever you think it's making a wrong move. ")
-    print("Controls are: \n\n UP_ARROW:MOVE_UP \n\n DOWN_ARROW: MOVE_DOWN \n\n RIGHT_ARROW: MOVE_RIGHT \n\n LEFT_ARROW: MOVE_LEFT \n\n MOUSE_CLICK: PICKS A BLOCK \n\n SPACE_BAR: DROPS THE SELECTED BLOCK")
+        "is to correct the agent whenever you think it's making a wrong move. ")
+    print("Whenever you think that the agent is oscillating or performing the wrong action. Press the space bar to pause the game then use the mouse to click on the block that "
+          "you would like to move and then use the arrow keys to move the block in the desired direction. When you think you have corrected the agent enough click the space bar"
+          "to unpause the game and let the algorithm take over.")
     print("\nThe block that you pick will have a ligher shade compared to its original color.")
     print("\nThe goal configuration is given in the tiny screen at the top right corner")
+    print("\n The first two demos will be mock rounds for you to get used to the environment.")
 
     #goal_choice=input("Press 1 if you want to demonstrate the same goal, 2 if you want to demonstrate a random goal.")
     #while(goal_choice!=1 and goal_choice!=2):
@@ -285,8 +289,11 @@ if __name__ == '__main__':
         input = input("Enter yes when you are ready for the task")
 
     if input.lower()=='yes':
-        for i in range(8):
-            chosen_goal = i//2
+        for i in range(10):
+            if i<2:
+                chosen_goal=0
+            else:
+                chosen_goal = i//2
             goal_config = demo_goal_config[chosen_goal]
             Demonstrations(states_x=350, states_y=350, blocks_count=3,stack_count=1, iteration_count=5000, debug=True)\
                  .q_learning_real(use_old=use_old,starting_nu=nu,demo_id=demo_id,record=True,goal_config=goal_config)
