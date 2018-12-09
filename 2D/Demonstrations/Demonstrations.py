@@ -106,6 +106,11 @@ class Demonstrations:
         alpha = 1
         gamma = 0.1
         action=None
+        picked=False
+        paused=False
+        user_choice = True
+        user_motion_pick = False
+        rendered_pick=True
         record_actions={}
         if use_old:
             if demo_id==1:
@@ -131,56 +136,70 @@ class Demonstrations:
             if curr_state not in q:
                 q[curr_state]={}
             print("Current State: ", curr_state)
-
-            user_choice=False
-            paused=True
-            picked=False
-            while not user_choice and paused:
-                time.sleep(1)
+            user_choice = True
+            action=None
+            user_motion_pick=False
+            while user_choice or paused:
+                time.sleep(0.5)
                 for event in pygame.event.get():
 
                     if event.type == KEYDOWN:
-                        if action!="PAUSE":
-                            if event.key ==K_SPACE:
-                                action="PAUSE"
+                        print("")
+                        if event.key ==K_SPACE:
+                            if paused==False:
                                 paused=True
-                        if picked and paused:
-                            print('Waiting for user correction.')
-                            if event.key == K_UP:
-                                user_choice=True
+                            else:
+                                block_world.block_dict[block_id].surf.fill(COLORS[block_id])
+                                user_motion_pick=False
                                 paused=False
+                                user_choice=False
+                        if rendered_pick and paused:
+                            print('Waiting for user correction.')
+                            print(block_id)
+                            if event.key == K_UP:
+                                print("d")
+                                user_choice=True
                                 picked=False
+                                user_motion_pick=True
                                 action = Action.MOVE_UP
                                 user_choice=True
                             elif event.key == K_DOWN:
+                                print("d")
                                 user_choice=True
-                                paused=False
                                 picked=False
+                                user_motion_pick=True
                                 action = Action.MOVE_DOWN
                             elif event.key == K_LEFT:
+                                print("d")
                                 user_choice=True
+                                user_motion_pick=True
                                 picked=False
-                                paused=False
                                 action = Action.MOVE_LEFT
                             elif event.key == K_RIGHT:
+                                print("d")
                                 user_choice=True
-                                paused=False
+                                user_motion_pick=True
                                 picked=False
                                 action = Action.MOVE_RIGHT
                     elif event.type == pygame.MOUSEBUTTONDOWN:
-                        if action=="PAUSE":
+                        if paused:
                             pos = pygame.mouse.get_pos()
                             for block in block_world.block_dict.values():
                                 if block.rect.collidepoint(pos):
                                     if block_id:
                                         block_world.block_dict[block_id].surf.fill(COLORS[block_id])
+                                    action=Action.PICK
                                     block_id = block.id
+                                    user_choice=True
                                     picked=True
-                                    #block_world.block_dict[block_id].surf.fill(CLICKED_COLOR[block_id])
+                                    block_world.block_dict[block_id].surf.fill(CLICKED_COLOR[block_id])
+                                    rendered_pick=False
                                     break
-                if action!="PAUSE" and picked==False:
-                    print("paused not true")
-                    paused=False
+
+                if  not user_motion_pick and paused==False:
+                    user_choice=False
+                if paused==False or (not rendered_pick  or user_motion_pick) :
+                    break
 
             if not user_choice:
                 action, block_id = self.get_next_action(curr_state, q, nu)
@@ -188,13 +207,11 @@ class Demonstrations:
                 if record:
                     record_actions["actions"].append(('algorithm',action,block_id))
             else:
+                if action==Action.PICK:
+                    rendered_pick=True
                 print('Skipping models choice to listen to the expert')
-                if record:
+                if record and action:
                     record_actions["actions"].append(('user',action,block_id))
-            if action==Action.DROP:
-                block_world.block_dict[block_id].surf.fill(COLORS[block_id])
-            else:
-                block_world.block_dict[block_id].surf.fill(CLICKED_COLOR[block_id])
 
 
             if self.debug: print("Action: ", action, block_id)
@@ -244,10 +261,10 @@ if __name__ == '__main__':
     demo_goal_config=[[0,1,2],[2,1,0],[1,2,0],[1,0,2]]
     np.random.shuffle(demo_goal_config)
     print("Welcome to the blockworld demonstration.")
-    print("The simulation shows a partially working algorithm that tries to stack blocks in the given goal configuration. \n The agent will attempt to move the blocks, you're task"
+    print("The simulation shows a partially working algorithm that tries to stack blocks in the given goal configuration. \n The agent will attempt to move the blocks, your task"
           "is to correct the agent whenever you think it's making a wrong move. ")
     print("Controls are: \n\n UP_ARROW:MOVE_UP \n\n DOWN_ARROW: MOVE_DOWN \n\n RIGHT_ARROW: MOVE_RIGHT \n\n LEFT_ARROW: MOVE_LEFT \n\n MOUSE_CLICK: PICKS A BLOCK \n\n SPACE_BAR: DROPS THE SELECTED BLOCK")
-    print("\nThe currently active block has a ligher shade of it's original color and on dropping the block, it becomes darker.")
+    print("\nThe block that you pick will have a ligher shade compared to its original color.")
     print("\nThe goal configuration is given in the tiny screen at the top right corner")
 
     #goal_choice=input("Press 1 if you want to demonstrate the same goal, 2 if you want to demonstrate a random goal.")
