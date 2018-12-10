@@ -35,22 +35,10 @@ class Oracle:
         is_goal_blocked = any([tuple(goal_position) == tuple(block_position) for block_position in state.block_positions])
         am_blocking_goal = any([tuple(goal_position) == tuple(curr_position) for goal_position in state.goal_positions]) and not tuple(curr_position) == tuple(state.goal_positions[block_idx])
 
-        is_left_allowed = state.is_action_allowed(Action.MOVE_LEFT, block_idx)
-        is_right_allowed = state.is_action_allowed(Action.MOVE_RIGHT, block_idx)
-        is_down_allowed = state.is_action_allowed(Action.MOVE_DOWN, block_idx)
-        is_up_allowed = state.is_action_allowed(Action.MOVE_UP, block_idx)
-
         is_left_good = state.is_action_good(Action.MOVE_LEFT, block_idx)
         is_right_good = state.is_action_good(Action.MOVE_RIGHT, block_idx)
         is_down_good = state.is_action_good(Action.MOVE_DOWN, block_idx)
         is_up_good = state.is_action_good(Action.MOVE_UP, block_idx)
-
-        allowed_actions = []
-
-        if is_left_allowed: allowed_actions.append(Action.MOVE_LEFT)
-        if is_right_allowed: allowed_actions.append(Action.MOVE_RIGHT)
-        if is_down_allowed: allowed_actions.append(Action.MOVE_DOWN)
-        if is_up_allowed: allowed_actions.append(Action.MOVE_UP)
 
         is_goal_to_the_left = goal_position[0] < curr_position[0]
         is_goal_to_the_right = goal_position[0] > curr_position[0]
@@ -75,6 +63,18 @@ class Oracle:
                 return Action.MOVE_LEFT, order
             elif is_right_good and is_goal_to_the_right:
                 return Action.MOVE_RIGHT, order
+
+        allowed_actions = []
+
+        is_left_allowed = state.is_action_allowed(Action.MOVE_LEFT, block_idx)
+        is_right_allowed = state.is_action_allowed(Action.MOVE_RIGHT, block_idx)
+        is_down_allowed = state.is_action_allowed(Action.MOVE_DOWN, block_idx)
+        is_up_allowed = state.is_action_allowed(Action.MOVE_UP, block_idx)
+
+        if is_left_allowed: allowed_actions.append(Action.MOVE_LEFT)
+        if is_right_allowed: allowed_actions.append(Action.MOVE_RIGHT)
+        if is_down_allowed: allowed_actions.append(Action.MOVE_DOWN)
+        if is_up_allowed: allowed_actions.append(Action.MOVE_UP)
 
         if am_blocking_goal and allowed_actions:
             return random.choice(allowed_actions), not order
