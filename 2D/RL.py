@@ -135,26 +135,34 @@ class RLTrainer:
         return q
 
     def test_q_learning_real(self,q_old,starting_nu=0.1):
-        goal_config = [np.random.permutation(self.blocks_count).tolist()]
         nu = starting_nu
+        prev_reward=0
         block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, self.stack_count, record=False)
         ever_seen_goal=False
         cnt=0
+        '''
+        state_s = State(
+            [[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in
+             range(self.blocks_count)],
+            block_world.selected_block_id, block_world.goal_config,screen_dims=(block_world.screen_width, block_world.screen_height))
+        block_world.goal_loc = state_s.goal_positions
+        '''
         while cnt<self.iteration_count:
             cnt+=1
             #q = q_old.copy()
             block_world.pre_render()
 
             curr_state = block_world.get_state_as_tuple_pramodith2()
-            if self.debug and curr_state in q: print("Current State: %s" +str(curr_state), q[curr_state])
+            if self.debug and curr_state in q_old: print("Current State: %s" +str(curr_state), q_old[curr_state])
             #if np.random.rand() < 0.01:
-            state_s = State(
-                [[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in
-                 range(self.blocks_count)],
-            block_world.selected_block_id, block_world.goal_config)
-            block_world.goal_loc = state_s.goal_positions
+            '''
+            state_s = State([[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in
+                             range(self.blocks_count)],
+                            selected_index=block_world.selected_block_id, goal_config=block_world.goal_config,
+                            screen_dims=(block_world.screen_width, block_world.screen_height))
             action, block_id = self.get_next_action_supervised_t(state_t=None, state_s=state_s, q=None, nu=0)
-            #action, block_id = self.get_next_action(curr_state, q_old, nu)
+            '''
+            action, block_id = self.get_next_action(curr_state, q_old, nu)
             if self.debug: print("Action: ", action, block_id)
 
             next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
@@ -163,16 +171,21 @@ class RLTrainer:
             # print("Reward")
             # print(new_reward)
 
-            if new_reward>=100:
+            if new_reward>70:
+                prev_reward=71
                 print("Converged in %d", cnt)
-                return cnt
+                #return cnt
             #if self.debug:
 
             # print("q:", q_old.get(str(curr_state),None))
             block_world.update_state_from_tuple_pramodith(next_state)
 
             block_world.render()
-            #time.sleep(0.1)
+            pygame.image.save(block_world.screen,"sample_videos/3_block_"+str(cnt)+".jpg")
+            if prev_reward>70:
+                return
+
+            time.sleep(0.1)
         return cnt
 
 
@@ -186,8 +199,7 @@ class RLTrainer:
             q_old=RLTrainer.load_obj("Q\q_oracle")
         else:
             q_old={}
-        #q_old = defaultdict(lambda: defaultdict(lambda: 0))
-        #goal_config = [np.random.permutation(self.blocks_count).tolist()]
+
         nu = starting_nu
         block_world = BlockWorld(self.states_x, self.states_y, self.blocks_count, self.stack_count, record=False)
         if self.debug: print("Goal: ", [[COLORS_STR[i] for i in stack if i>=0] for stack in block_world.goal_config])
@@ -209,8 +221,8 @@ class RLTrainer:
             if curr_state not in q:
                 q[curr_state]={}
             #print("Current State: ", curr_state)
-
-            if np.random.rand() < 2:
+            '''
+            if np.random.rand() < 0.1:
                 state_s = State([[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in range(self.blocks_count)],
                     selected_index=block_world.selected_block_id, goal_config=block_world.goal_config,
                     screen_dims=(block_world.screen_width, block_world.screen_height))
@@ -220,24 +232,27 @@ class RLTrainer:
                 # block_world.goal_loc = state_s.goal_positions
                 action, block_id = self.get_next_action_supervised_t(state_t=None, state_s=state_s, q=None, nu=0)
             else:
-                action, block_id = self.get_next_action(curr_state, q, nu)
-                if action==Action.PICK or action==Action.DROP:
+               
+            
+            if action==Action.PICK or action==Action.DROP:
                     actions_queue.append(0)
-                else:
+            else:
                     actions_queue.append(1)
 
-            state_distance_queue.append(curr_state[0])
-            # if len(state_distance_queue)==6:
-            #     if (len(set(list(state_distance_queue)[0::2]))==1 and len(set(list(state_distance_queue)[1::2]))==1) or do_next>0:
-            #         state_s = State(block_positions=[[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in range(self.blocks_count)],
-            #             selected_index=block_world.selected_block_id, goal_config=block_world.goal_config, screen_dims=(block_world.screen_width, block_world.screen_height))
-            #         # state_s.goal_positions = block_world.goal_loc
-            #         action, block_id = self.get_next_action_supervised_t(state_t=None, state_s=state_s, q=None, nu=0)
-            #         print("Oracle action:", action)
-
             #action, block_id = self.get_next_action(curr_state, q, nu)
-            #if action==Action.DROP:
-            #    s=0
+
+
+            
+            state_distance_queue.append(curr_state[0])
+            if len(state_distance_queue)==6:
+                 if (len(set(list(state_distance_queue)[0::2]))==1 and len(set(list(state_distance_queue)[1::2]))==1) or do_next>0:
+                    state_s = State([[block_world.block_dict[i].rect.centerx, block_world.block_dict[i].rect.centery] for i in range(self.blocks_count)],
+                         selected_index=block_world.selected_block_id, goal_config=block_world.goal_config,
+                         screen_dims=(block_world.screen_width, block_world.screen_height))
+                    action, block_id = self.get_next_action_supervised_t(state_t=None, state_s=state_s, q=None, nu=0)
+
+            '''
+            action, block_id = self.get_next_action(curr_state, q, nu)
             if self.debug: print("Action: ", action, block_id)
             next_state = block_world.get_next_state_based_on_state_tuple(curr_state, (action, block_id))
             new_reward = block_world.get_reward_for_state(next_state,curr_state)
@@ -260,6 +275,7 @@ class RLTrainer:
             if self.debug: print("max_q:", max_q_dash_s_dash_a_dash)
             if new_reward > 70:
                 q[curr_state][(action, block_id)] = ((1 - alpha) * q_sa) + (alpha * (new_reward))
+                return
             else:
                 q[curr_state][(action, block_id)] += alpha * (new_reward + gamma * (max_q_dash_s_dash_a_dash) - q_sa)
 
@@ -442,19 +458,18 @@ def test():
 if __name__ == '__main__':
     use_old=False
     nu = 0.1
-
-    for i in range(50):
+    '''
+    for i in range(100):
          RLTrainer(states_x=350, states_y=350, blocks_count=3,stack_count=1, iteration_count=5000, debug=False).q_learning_real(use_old=use_old,starting_nu=nu)
          use_old=True
 
-
-    #q = RLTrainer.load_obj("Q\q_oracle")
     '''
+    q = RLTrainer.load_obj("Q\q_oracle")
+
     iterations = []
-    for i in range(100):
-        iter = RLTrainer(states_x=350, states_y=350, blocks_count=3, stack_count=1, iteration_count=1000,debug=True).test_q_learning_real(q,starting_nu=0.05)
+    for i in range(1):
+        iter = RLTrainer(states_x=350, states_y=350, blocks_count=3, stack_count=1, iteration_count=1000,debug=True).test_q_learning_real(q,starting_nu=0.1)
         iterations.append(iter)
     print(iterations)
-    print(iterations.count(1000))
+    print(iterations.count(2000))
     print(sum(iterations) / len(iterations))
-    '''
