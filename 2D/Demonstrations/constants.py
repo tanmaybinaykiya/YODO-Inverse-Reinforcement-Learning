@@ -19,9 +19,10 @@ CYAN = Color["CYAN"]
 WHITE = Color["WHITE"]
 GRAY = Color["GRAY"]
 
+CLICKED_COLOR={0:(255,100,100),1:(100,100,255),2:(100,255,100),3:(100,255,100)}
 COLORS = [Color["RED"], Color["BLUE"], Color["GREEN"], Color["YELLOW"], Color["CYAN"], Color["WHITE"]]
 COLORS_STR = ["RED", "BLUE", "GREEN", "YELLOW", "CYAN", "WHITE"]
-FRAME_LOCATION = "screen_capture"
+FRAME_LOCATION = "Demonstrations"
 
 
 # might require just for DQN
