@@ -1,5 +1,5 @@
 # YODO-Inverse-Reinforcement-Learning
-YODO: Inverse Reinforcement Learning
+YODO: Inverse Reinforcement Learning  
 Pramodith B, Tanmay B   
 Fall 2018 CS 8803 Interactive Robot Learning: Class Project   
 Georgia Tech   
